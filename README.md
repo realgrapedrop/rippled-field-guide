@@ -113,7 +113,9 @@ You can't fix what you can't see. Monitor:
 - **Peer connections**: Healthy count, no sudden drops.
 - **Ledger sync**: Are you keeping up with the network?
 
-Prometheus + Grafana is a solid stack. Alert on meaningful thresholds—not every blip.
+For a turnkey solution, the [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard) provides real-time monitoring built specifically for validator operators. It tracks 40+ metrics via WebSocket streams, includes pre-configured alerts for critical states, and supports Discord, Slack, PagerDuty, and other notification channels. Deploys in minutes with Docker.
+
+For custom setups, Prometheus + Grafana is a solid stack. Alert on meaningful thresholds—not every blip.
 
 ### Upgrades
 
