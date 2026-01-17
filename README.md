@@ -18,23 +18,34 @@ The XRP Ledger has been operating continuously since 2012, processing over 2 bil
 
 Running a validator is a responsibility, not just a technical deployment. You are becoming part of the infrastructure that secures the network and determines its rules. Before you spin up a validator, understand what you're signing up for.
 
-### The Core Duties
+### Consensus Duties
 
-A validator must be **online**, **honest**, and **fast**.
+Every 3-5 seconds, validators participate in a consensus round to agree on the next ledger. These are your real-time responsibilities:
 
 | Duty | Target | What It Means |
 |------|--------|---------------|
 | **Availability** | 100% uptime | Your validator should be online and participating in every consensus round. The network tracks your performance over the last 256 ledgers. |
-| **Agreement** | >99% | Your votes must match the consensus outcome. Disagreement may indicate stale software, bugs, or (worst case) intentional misbehavior. |
-| **Timeliness** | Votes before round ends | A late vote is a missed vote. Your infrastructure must deliver sub-second response times. |
+| **Agreement** | >99% | Your validations must match the consensus outcome. Disagreement may indicate stale software, bugs, or (worst case) intentional misbehavior. |
+| **Timeliness** | Validate before round ends | A late validation is a missed validation. Your infrastructure must deliver sub-second response times. |
 | **Impartiality** | Process all transactions | You don't get to pick winners. Process every valid transaction without censorship or delay. |
+
+### Governance Duties
+
+Validators on UNLs also participate in network governance through voting:
+
+| Duty | Frequency | What It Means |
+|------|-----------|---------------|
+| **Amendment Voting** | Ongoing | Protocol changes require >80% validator support for 2 weeks to activate. Understand proposals before voting. Your vote shapes the network's future. |
+| **Fee Voting** | Ongoing | Validators vote on base transaction fees and reserve requirements. The network uses the median of all votes. |
+
+Governance voting is configured in `rippled.cfg` and persists until you change it. This is different from consensus validation, which happens automatically every few seconds.
 
 ### What Good Citizenship Looks Like
 
 - **Run the latest software.** Always. Without modifications. When a new release drops, upgrade promptly.
 - **Announce maintenance.** If you need downtime, tell the community ahead of time.
 - **Verify your domain.** Prove you control the identity associated with your validator.
-- **Vote responsibly.** Amendments are protocol changes. Understand them before voting.
+- **Participate in governance.** Don't ignore amendment votes. Understand what you're voting for.
 - **Be reachable.** The community should be able to identify and contact you.
 - **Stay informed.** Subscribe to [rippled releases](https://github.com/XRPLF/rippled/releases) and the [XRPL Google Group](https://groups.google.com/g/ripple-server).
 
