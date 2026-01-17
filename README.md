@@ -38,7 +38,7 @@ Validators on UNLs also participate in network governance through voting:
 | **Amendment Voting** | Ongoing | Protocol changes require >80% validator support for 2 weeks to activate. Understand proposals before voting. Your vote shapes the network's future. |
 | **Fee Voting** | Ongoing | Validators vote on base transaction fees and reserve requirements. The network uses the median of all votes. |
 
-Governance voting is configured in `rippled.cfg` and persists until you change it. This is different from consensus validation, which happens automatically every few seconds.
+Governance voting is configured in `rippled.cfg` or via the admin API. This is different from consensus validation, which happens automatically every few seconds.
 
 ### What Good Citizenship Looks Like
 
