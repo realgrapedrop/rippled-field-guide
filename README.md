@@ -1,4 +1,6 @@
-# The Rippled Field Guide
+<p align="center">
+  <img src="images/rippled-field-guide-logo.png" alt="The Rippled Field Guide" width="400">
+</p>
 
 Operational intelligence for XRP Ledger validators and stock nodes. Compiled from production experience and core developer insights.
 
