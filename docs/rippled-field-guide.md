@@ -1,6 +1,6 @@
 # The Rippled Field Guide
 
-The following recommendations come from real-world validator operations, GitHub issues, and direct input from rippled engineers. This configuration guidance is based on years of core insights and lessons learned the hard way, your cliff notes to bootstrap your rippled stock node or validator.
+The following recommendations come from real-world validator operations, GitHub issues, and direct input from rippled engineers. This guidance is based on years of core insights and lessons learned the hard way, your cliff notes to bootstrap your rippled node or validator.
 
 ---
 
