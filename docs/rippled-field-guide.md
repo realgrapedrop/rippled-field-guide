@@ -477,7 +477,7 @@ rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl
 
 ## Contributing
 
-This document is maintained by [grapedrop.xyz](https://grapedrop.xyz). Contributions, corrections, and additional insights are welcome.
+This document is maintained by [xrp-validator.grapedrop.xyz](https://xrp-validator.grapedrop.xyz). Contributions, corrections, and additional insights are welcome.
 
 ---
 

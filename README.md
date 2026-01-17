@@ -216,4 +216,4 @@ Found something that should be in here? Have a correction or additional insight?
 
 ## Maintainer
 
-[grapedrop.xyz](https://grapedrop.xyz)
+[xrp-validator.grapedrop.xyz](https://xrp-validator.grapedrop.xyz)
