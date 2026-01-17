@@ -53,7 +53,7 @@ Governance voting is configured in `rippled.cfg` or via the admin API. This is d
 
 The XRP Ledger doesn't have slashing penalties. If you misbehave or go offline, you won't lose funds. But you will lose something more valuable: **trust**.
 
-Poor performers get added to the **Negative UNL**—a list of validators the network temporarily ignores for consensus calculations. Persistent problems lead to removal from UNL publisher lists entirely. Your reputation takes years to build and moments to destroy.
+Poor performers get added to the **Negative UNL**, a list of validators the network temporarily ignores for consensus calculations. Persistent problems lead to removal from UNL publisher lists entirely. Your reputation takes years to build and moments to destroy.
 
 ---
 
@@ -75,7 +75,7 @@ Don't cheap out. Validators are latency-sensitive and I/O-intensive.
 Your validator is a target. Design accordingly.
 
 **Infrastructure:**
-- Run on **bare metal** or dedicated servers—not VMs, not shared hosting.
+- Run on **bare metal** or dedicated servers. Not VMs, not shared hosting.
 - Data center with redundant power, cooling, and physical security.
 - Uninterruptible power supply (UPS) and backup generator.
 
@@ -88,7 +88,7 @@ Your validator is a target. Design accordingly.
 
 **Keys:**
 - Store your master key **offline** (encrypted USB in a secure location).
-- Use validator tokens for the running server—these can be rotated if compromised.
+- Use validator tokens for the running server. These can be rotated if compromised.
 - Config file permissions: `chmod 600`.
 
 ### Docker vs. Bare Metal
@@ -115,12 +115,12 @@ You can't fix what you can't see. Monitor:
 
 For a turnkey solution, the [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard) provides real-time monitoring built specifically for validator operators. It tracks 40+ metrics via WebSocket streams, includes pre-configured alerts for critical states, and supports Discord, Slack, PagerDuty, and other notification channels. Deploys in minutes with Docker.
 
-For custom setups, Prometheus + Grafana is a solid stack. Alert on meaningful thresholds—not every blip.
+For custom setups, Prometheus + Grafana is a solid stack. Alert on meaningful thresholds, not every blip.
 
 ### Upgrades
 
 - **Subscribe** to release notifications.
-- **Upgrade promptly**—especially when amendments are approaching activation.
+- **Upgrade promptly**, especially when amendments are approaching activation.
 - **Test configuration changes** on a non-production node first.
 - **Amendment-blocked** servers can't participate in consensus. Don't let this happen to you.
 
@@ -134,7 +134,7 @@ For custom setups, Prometheus + Grafana is a solid stack. Alert on meaningful th
 
 Validators on UNLs vote on protocol amendments. An amendment needs >80% support for two consecutive weeks to activate. Once passed, changes are **permanent**.
 
-Understand what you're voting for. Engage with the community. Don't abstain by default—your vote matters.
+Understand what you're voting for. Engage with the community. Don't abstain by default. Your vote matters.
 
 ---
 
@@ -157,7 +157,7 @@ Getting on a UNL isn't automatic. It's earned.
 
 ### Building Your Reputation
 
-1. Run reliably for the long haul—there are no shortcuts.
+1. Run reliably for the long haul. There are no shortcuts.
 2. Set up domain verification from day one.
 3. Publish your validator's public key on your website.
 4. Register on validator directories like [XRPSCAN](https://xrpscan.com/validators).
