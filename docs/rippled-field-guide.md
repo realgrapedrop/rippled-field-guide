@@ -1,6 +1,6 @@
 # The Rippled Field Guide
 
-Operational intelligence for XRP Ledger validators and stock nodes. Compiled from production experience and core developer insights.
+The following recommendations come from real-world validator operations, GitHub issues, and direct input from rippled engineers. Configuration guidance based on core developer insights and lessons learned the hard way.
 
 ---
 
