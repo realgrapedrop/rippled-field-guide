@@ -77,23 +77,59 @@ Don't try to manually tune thread counts or cache sizes. rippled's auto-tuning b
 
 #### The Bottom Line
 
-**Set `online_delete` as high as your disk space allows.**
+**Set `online_delete` to at least 16384, preferably 32768.** The default value (512) causes I/O storms that hurt validator performance.
 
-| Disk Budget for DB | Recommended Setting | History Retained |
-|--------------------|---------------------|------------------|
-| ~25 GB | 32768 | ~36 hours |
-| ~50 GB | 65536 | ~3 days |
-| ~100 GB+ | 131072 | ~6 days |
+| Scenario | online_delete | Rationale |
+|----------|---------------|-----------|
+| Default (not recommended) | 512-2000 | Causes I/O storms |
+| Minimum stable | 8192 | ~8 hours between deletes |
+| **Recommended** | **16384-32768** | **14-36 hours between deletes** |
+| Conservative | 50000+ | Days between deletes, if disk permits |
 
-#### Why Higher is Better
+#### The Problem: I/O Storms
 
-Counter-intuitively, **lower `online_delete` values cause more I/O, not less**.
+Even on high-spec hardware (150k IOPS NVMe, 80 cores, 128 GB RAM), validators experience dropped ledgers due to I/O storms triggered by low `online_delete` values. The pattern is distinctive:
+
+**Sawtooth Pattern (Low online_delete = 512):**
+```
+IOPS
+30k ┤        ╭─╮        ╭─╮        ╭─╮        ╭─╮
+    │       ╱   ╲       ╱  ╲       ╱  ╲       ╱  ╲    ← Delete storms
+15k ┤      ╱     ╲     ╱    ╲     ╱    ╲     ╱    ╲
+    │     ╱       ╲   ╱      ╲   ╱      ╲   ╱      ╲
+ 0k ┼────╱─────────╲─╱────────╲─╱────────╲─╱────────╲──
+    └────┴──────────┴──────────┴──────────┴──────────┴────► Time
+         ~30min    ~30min    ~30min    ~30min
+```
+
+**Smooth Pattern (High online_delete = 16384+):**
+```
+IOPS
+30k ┤
+    │
+15k ┤
+    │  ────────────────────────────────────────────  ← Steady state
+ 0k ┼
+    └──────────────────────────────────────────────────► Time
+```
+
+#### Why NuDB Makes This Worse
+
+NuDB (rippled's ledger database) is optimized for append-mostly workloads:
+
+- **Writes are fast:** Sequential appends are efficient
+- **Deletes are expensive:** Requires compaction and reorganization
+- **Frequent small deletes = worst case for NuDB**
+
+By increasing `online_delete`, you allow NuDB to operate in its optimal mode (appending) for longer periods before incurring deletion overhead.
+
+#### The Rotation Mechanism
 
 rippled maintains two NuDB databases simultaneously:
 - **"Writable" DB** - receives new/modified nodes
 - **"Archive" DB** - the older database being phased out
 
-During rotation, rippled must copy all nodes that **weren't modified** since the last rotation from archive to writable. This is the expensive operation.
+During rotation, rippled copies all nodes that **weren't modified** since the last rotation from archive to writable. This copy operation is the expensive step.
 
 **The math:**
 - Lower `online_delete` → fewer ledgers between rotations → fewer transactions → fewer modified nodes
@@ -102,14 +138,27 @@ During rotation, rippled must copy all nodes that **weren't modified** since the
 
 **Extreme example:** If you rotated every ledger and only 6 accounts changed, you'd copy millions of unchanged nodes. With 32,768 ledgers between rotations, far more nodes have been naturally modified, so fewer need copying.
 
+#### Impact on Validator Performance
+
+| Metric | During Delete Storm | Normal Operation |
+|--------|---------------------|------------------|
+| I/O latency | Spikes to 10-100+ ms | 1-2 ms |
+| Consensus participation | May miss rounds | Full participation |
+| Agreement % | Drops periodically | Stable |
+| server_state | May flicker | Steady proposing |
+
+A validator can have perfect agreement scores most of the time but experience periodic drops during I/O storms.
+
 #### The Trade-off
 
-| Setting | Rotation Frequency | I/O Pattern | Disk Usage |
-|---------|-------------------|-------------|------------|
-| 512 | Every ~30 min | Severe sawtooth spikes | Minimal |
-| 2000 | Every ~2 hours | Noticeable spikes | Low |
-| 32768 | Every ~36 hours | Smooth | Moderate |
-| 65536+ | Every ~3+ days | Very smooth | Higher |
+| online_delete | Disk Space | I/O Pattern | Delete Frequency |
+|---------------|------------|-------------|------------------|
+| 512 | ~250 MB | Sawtooth (bad) | Every 30 min |
+| 2000 | ~1 GB | Spiky | Every 2 hours |
+| 16384 | ~8-12 GB | Smooth | Every 14-18 hours |
+| 32768 | ~16-24 GB | Very smooth | Every 36 hours |
+
+**The trade-off is minimal:** Even at 16384, you're only using ~8-12 GB more disk space in exchange for dramatically smoother I/O and more stable validation.
 
 #### Configuration
 
@@ -118,12 +167,21 @@ During rotation, rippled must copy all nodes that **weren't modified** since the
 type=NuDB
 path=/var/lib/rippled/db/nudb
 online_delete=32768
+advisory_delete=0
 
 [ledger_history]
 32768
 ```
 
 **Note:** `ledger_history` must be ≤ `online_delete`.
+
+#### Verifying the Change
+
+After changing `online_delete` and restarting rippled:
+
+1. The first delete cycle will still occur at the previous threshold
+2. The smooth I/O pattern becomes visible after ledger count exceeds the new threshold
+3. Monitor your disk I/O - the sawtooth pattern should disappear
 
 #### Additional Tuning Parameters
 
@@ -137,7 +195,7 @@ If you still experience issues, these parameters in `[node_db]` may help:
 
 #### Source
 
-This insight comes from [GitHub discussion XRPLF/rippled#6202](https://github.com/XRPLF/rippled/issues/6202), with explanation from Ripple engineer @ximinez.
+This issue was identified by [@shortthefomo](https://github.com/shortthefomo) and documented in [rippled issue #6202](https://github.com/XRPLF/rippled/issues/6202), with technical explanation from Ripple engineer [@ximinez](https://github.com/ximinez).
 
 ### advisory_delete
 
