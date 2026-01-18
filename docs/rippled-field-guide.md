@@ -1,10 +1,10 @@
-# The Rippled Field Guide
+# **__THE RIPPLED FIELD GUIDE__**
 
-The following recommendations come from real-world validator operations, GitHub issues, and direct input from rippled engineers. This guidance is based on years of core insights and lessons learned the hard way, your cliff notes to bootstrap your rippled node or validator.
+*The following recommendations come from real-world validator operations, GitHub issues, and direct input from rippled engineers. This guidance is based on years of core insights and lessons learned the hard way, your cliff notes to bootstrap your rippled node or validator.*
 
 ---
 
-## Table of Contents
+# Table of Contents
 
 - [Hardware Requirements](#hardware-requirements)
 - [Node Sizing](#node-sizing)
@@ -31,9 +31,9 @@ The following recommendations come from real-world validator operations, GitHub 
 
 ---
 
-## Hardware Requirements
+# Hardware Requirements
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Use x86-64 (Intel/AMD) processors for production.** ARM and Apple Silicon are not officially supported.
 
@@ -44,7 +44,7 @@ The following recommendations come from real-world validator operations, GitHub 
 | Disk | SSD, 50 GB | NVMe, 10,000+ sustained IOPS |
 | Network | Gigabit | Gigabit, low latency |
 
-#### CPU Architecture
+**CPU Architecture**
 
 | Architecture | Examples | Production Support |
 |--------------|----------|-------------------|
@@ -53,7 +53,7 @@ The following recommendations come from real-world validator operations, GitHub 
 
 AMD Ryzen and Intel processors use the same x86-64 instruction set and are equally supported. ARM-based processors (including Apple Silicon) can compile rippled for development, but are **not recommended for production validators or nodes**.
 
-#### Disk Performance
+**Disk Performance**
 
 Storage speed is critical. Requirements:
 
@@ -70,17 +70,17 @@ Storage speed is critical. Requirements:
 
 If cloud is unavoidable, use instances with local NVMe storage (AWS i3/i4 series, Azure Lsv2, OCI Dense I/O) and dedicated network bandwidth ("n" suffix instances on AWS like C5n, M5n).
 
-#### Source
+**Source**
 
 See [XRPL System Requirements](https://xrpl.org/docs/infrastructure/installation/system-requirements) for official specifications.
 
 ---
 
-## Node Sizing
+# Node Sizing
 
 ### node_size
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Match `node_size` to your available RAM.** This is the single most important sizing decision.
 
@@ -92,7 +92,7 @@ See [XRPL System Requirements](https://xrpl.org/docs/infrastructure/installation
 | large | 16-32 GB | Busy stock node |
 | huge | 32-64 GB | Validators, high-traffic nodes |
 
-#### What It Controls
+**What It Controls**
 
 The `node_size` parameter is a macro that tunes multiple internal settings:
 
@@ -101,13 +101,13 @@ The `node_size` parameter is a macro that tunes multiple internal settings:
 - Database buffer sizes
 - Fetch pack sizes for historical data
 
-#### Why It Matters
+**Why It Matters**
 
 - **Undersized**: Node falls behind, misses ledgers, poor sync performance
 - **Oversized**: Wastes memory, no performance benefit
 - **Just right**: Smooth operation with efficient resource use
 
-#### Configuration
+**Configuration**
 
 ```ini
 [node_size]
@@ -116,17 +116,17 @@ huge
 
 No other parameters needed - rippled auto-tunes everything else based on this value.
 
-#### Common Mistake
+**Common Mistake**
 
 Don't try to manually tune thread counts or cache sizes. rippled's auto-tuning based on `node_size` is well-tested. Manual overrides often make things worse.
 
 ---
 
-## Database Management
+# Database Management
 
 ### online_delete Tuning
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Set `online_delete` to at least 16384, preferably 32768.** The default value (512) causes I/O storms that hurt validator performance.
 
@@ -137,7 +137,7 @@ Don't try to manually tune thread counts or cache sizes. rippled's auto-tuning b
 | **Recommended** | **16384-32768** | **14-36 hours between deletes** |
 | Conservative | 50000+ | Days between deletes, if disk permits |
 
-#### The Problem: I/O Storms
+**The Problem: I/O Storms**
 
 Even on high-spec hardware (150k IOPS NVMe, 80 cores, 128 GB RAM), validators experience dropped ledgers due to I/O storms triggered by low `online_delete` values. The pattern is distinctive:
 
@@ -164,7 +164,7 @@ IOPS
     └──────────────────────────────────────────────────► Time
 ```
 
-#### Why NuDB Makes This Worse
+**Why NuDB Makes This Worse**
 
 NuDB (rippled's ledger database) is optimized for append-mostly workloads:
 
@@ -174,7 +174,7 @@ NuDB (rippled's ledger database) is optimized for append-mostly workloads:
 
 By increasing `online_delete`, you allow NuDB to operate in its optimal mode (appending) for longer periods before incurring deletion overhead.
 
-#### The Rotation Mechanism
+**The Rotation Mechanism**
 
 rippled maintains two NuDB databases simultaneously:
 - **"Writable" DB** - receives new/modified nodes
@@ -189,7 +189,7 @@ During rotation, rippled copies all nodes that **weren't modified** since the la
 
 **Extreme example:** If you rotated every ledger and only 6 accounts changed, you'd copy millions of unchanged nodes. With 32,768 ledgers between rotations, far more nodes have been naturally modified, so fewer need copying.
 
-#### Impact on Validator Performance
+**Impact on Validator Performance**
 
 | Metric | During Delete Storm | Normal Operation |
 |--------|---------------------|------------------|
@@ -200,7 +200,7 @@ During rotation, rippled copies all nodes that **weren't modified** since the la
 
 A validator can have perfect agreement scores most of the time but experience periodic drops during I/O storms.
 
-#### The Trade-off
+**The Trade-off**
 
 | online_delete | Disk Space | I/O Pattern | Delete Frequency |
 |---------------|------------|-------------|------------------|
@@ -211,7 +211,7 @@ A validator can have perfect agreement scores most of the time but experience pe
 
 **The trade-off is minimal:** Even at 16384, you're only using ~8-12 GB more disk space in exchange for dramatically smoother I/O and more stable validation.
 
-#### Configuration
+**Configuration**
 
 ```ini
 [node_db]
@@ -226,7 +226,7 @@ advisory_delete=0
 
 **Note:** `ledger_history` must be ≤ `online_delete`.
 
-#### Verifying the Change
+**Verifying the Change**
 
 After changing `online_delete` and restarting rippled:
 
@@ -234,39 +234,39 @@ After changing `online_delete` and restarting rippled:
 2. The smooth I/O pattern becomes visible after ledger count exceeds the new threshold
 3. Monitor your disk I/O - the sawtooth pattern should disappear
 
-#### Additional Tuning Parameters
+**Additional Tuning Parameters**
 
 If you still experience issues, these parameters in `[node_db]` may help:
 - `age_threshold_seconds` - minimum age before deletion eligible
 - `recovery_wait_seconds` - delay before rotation resumes after interruption
 
-#### The One Rule
+**The One Rule**
 
 **Never use low values to "save disk space."** You'll pay for it in I/O storms and degraded validator performance. Disk is cheap; validator reputation isn't.
 
-#### Source
+**Source**
 
 This issue was identified by [@shortthefomo](https://github.com/shortthefomo) and documented in [rippled issue #6202](https://github.com/XRPLF/rippled/issues/6202), with technical explanation from Ripple engineer [@ximinez](https://github.com/ximinez).
 
 ### advisory_delete
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Use `advisory_delete=0` (the default).** Let rippled manage deletion automatically.
 
-#### What It Does
+**What It Does**
 
 | Value | Behavior |
 |-------|----------|
 | 0 | rippled decides when to delete old ledgers (automatic) |
 | 1 | rippled waits for an external signal before deleting |
 
-#### When to Use Each
+**When to Use Each**
 
 - **`0` (recommended)**: Standard deployments. rippled handles everything.
 - **`1`**: Only if you have external tooling that needs to process ledger data before deletion, or you're running a specialized archival integration.
 
-#### Configuration
+**Configuration**
 
 ```ini
 [node_db]
@@ -278,11 +278,11 @@ online_delete=32768
 
 ---
 
-## Network Configuration
+# Network Configuration
 
 ### compression
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Always enable compression.** There's no good reason to disable it.
 
@@ -291,17 +291,17 @@ online_delete=32768
 true
 ```
 
-#### What It Does
+**What It Does**
 
 Compresses peer protocol messages using LZ4. Reduces bandwidth usage by 60-80% with negligible CPU overhead.
 
-#### When to Disable
+**When to Disable**
 
 Almost never. The only scenario: you're on a local network with unlimited bandwidth and you're chasing microseconds of latency. Even then, the savings are marginal.
 
 ### peers_max
 
-#### The Bottom Line
+**The Bottom Line**
 
 **21-30 for validators, 15-21 for stock nodes.**
 
@@ -311,16 +311,16 @@ Almost never. The only scenario: you're on a local network with unlimited bandwi
 | Stock node | 15-21 | Balance between connectivity and resources |
 | Private/minimal | 10-15 | Minimum viable connectivity |
 
-#### The Trade-off
+**The Trade-off**
 
 - **More peers**: Faster transaction/ledger propagation, more redundancy if peers drop
 - **Fewer peers**: Less bandwidth, CPU, and memory usage
 
-#### Why Validators Don't Need Huge Counts
+**Why Validators Don't Need Huge Counts**
 
 Validators receive transactions from the network and propagate validations. They don't need 100 peers - they need *enough* peers to stay reliably connected. 21 well-connected peers is plenty.
 
-#### Configuration
+**Configuration**
 
 ```ini
 [peers_max]
@@ -329,7 +329,7 @@ Validators receive transactions from the network and propagate validations. They
 
 ---
 
-## Port Configuration & Security
+# Port Configuration & Security
 
 ### Port Types
 
@@ -342,7 +342,7 @@ rippled uses four types of ports, each serving a different purpose:
 | **WebSocket Admin** | 6006 | ws | Administrative WebSocket API. Same privileged access as RPC. |
 | **WebSocket Public** | 5006 | ws | Public WebSocket API for clients. Subscribe to streams, submit transactions. |
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Only port 51235 (peer) should be exposed to the internet.** Admin ports must be restricted to trusted IPs. Public WebSocket is optional and should be disabled on validators unless you have a specific need.
 
@@ -355,7 +355,7 @@ This is the most commonly misunderstood part of rippled configuration. These two
 | `ip` | Which network interface to bind to | Controls who can connect at the network level |
 | `admin` | Which IPs can run privileged commands | Controls who can execute admin commands after connecting |
 
-#### The Dangerous Pattern
+**The Dangerous Pattern**
 
 ```ini
 # DON'T DO THIS - exposes admin to the internet
@@ -368,7 +368,7 @@ protocol = http
 
 With `admin = 0.0.0.0`, anyone who can reach port 5005 can run `stop`, dump your validator keys, or worse.
 
-#### The Safe Patterns
+**The Safe Patterns**
 
 **Pattern 1: Localhost only (simplest)**
 ```ini
@@ -402,11 +402,11 @@ Binds only to the private network interface. Admin restricted to the validator i
 
 ### send_queue_limit
 
-#### The Bottom Line
+**The Bottom Line**
 
 **100 for admin WebSockets, 500 for public WebSockets.**
 
-#### What It Does
+**What It Does**
 
 Controls how many outbound messages can queue per WebSocket connection before rippled starts dropping messages or disconnecting slow clients.
 
@@ -419,7 +419,7 @@ Higher values tolerate slower clients but use more memory per connection.
 
 ### Security Patterns
 
-#### Validator Configuration (recommended)
+**Validator Configuration (recommended)**
 
 Validators should minimize attack surface. Disable public WebSocket unless needed:
 
@@ -445,7 +445,7 @@ protocol = peer
 
 No public WebSocket. Admin only on localhost. Only peer port exposed.
 
-#### Stock Node with Public API
+**Stock Node with Public API**
 
 If you're running a public API node:
 
@@ -475,7 +475,7 @@ ip = 0.0.0.0
 protocol = peer
 ```
 
-#### Docker with External Monitoring
+**Docker with External Monitoring**
 
 When monitoring tools (like [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard)) run in Docker:
 
@@ -516,7 +516,7 @@ sudo ufw allow from 10.0.0.20 to any port 6006
 # Deny admin ports from everywhere else (implicit with ufw, explicit with iptables)
 ```
 
-#### What to Expose
+**What to Expose**
 
 | Port | Public Internet | Private Network | Localhost |
 |------|-----------------|-----------------|-----------|
@@ -525,17 +525,17 @@ sudo ufw allow from 10.0.0.20 to any port 6006
 | 6006 (WS admin) | **Never** | If needed | Yes |
 | 5006 (WS public) | Optional | Optional | Yes |
 
-#### Source
+**Source**
 
 For hardened multi-host architectures, see [Hardened Architecture Guide](https://github.com/realgrapedrop/xrpl-validator-dashboard/blob/main/docs/HARDENED_ARCHITECTURE.md).
 
 ---
 
-## Time Synchronization
+# Time Synchronization
 
 ### sntp_servers
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Configure multiple diverse time sources.** Consensus depends on accurate time.
 
@@ -547,13 +547,13 @@ time.cloudflare.com
 time.google.com
 ```
 
-#### Why Multiple Servers
+**Why Multiple Servers**
 
 - **Redundancy**: If one server is unreachable, others provide time
 - **Cross-checking**: rippled can detect if one source is wrong
 - **Low latency**: Different providers have different geographic coverage
 
-#### Good Server Choices
+**Good Server Choices**
 
 | Server | Type | Notes |
 |--------|------|-------|
@@ -562,7 +562,7 @@ time.google.com
 | time.cloudflare.com | CDN | Low latency globally |
 | time.google.com | CDN | Smeared leap seconds |
 
-#### Why Time Matters
+**Why Time Matters**
 
 The XRP Ledger consensus protocol uses timestamps. Clock drift can cause:
 - Validation timing issues
@@ -573,9 +573,9 @@ Your system should also run ntpd or chronyd for OS-level time sync.
 
 ---
 
-## Fee Voting
+# Fee Voting
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Use the network defaults unless you have strong governance reasons to deviate.**
 
@@ -586,7 +586,7 @@ account_reserve = 1000000
 owner_reserve = 200000
 ```
 
-#### What These Values Mean
+**What These Values Mean**
 
 | Setting | Value | Human Readable | Purpose |
 |---------|-------|----------------|---------|
@@ -594,7 +594,7 @@ owner_reserve = 200000
 | account_reserve | 1000000 | 1 XRP | Minimum balance to activate account |
 | owner_reserve | 200000 | 0.2 XRP | Cost per owned object (trustline, offer, etc.) |
 
-#### How Fee Voting Works
+**How Fee Voting Works**
 
 Validators vote on these values. The network uses the **median** of all validator votes. This means:
 
@@ -602,13 +602,13 @@ Validators vote on these values. The network uses the **median** of all validato
 - Changing network fees requires coordinated validator consensus
 - Outlier votes are ignored
 
-#### Philosophy Behind Current Values
+**Philosophy Behind Current Values**
 
 - **reference_fee (10 drops)**: Low enough for normal use, high enough to make spam expensive at scale
 - **account_reserve (1 XRP)**: Prevents ledger bloat from millions of empty accounts
 - **owner_reserve (0.2 XRP)**: Makes users think twice before creating objects that live forever in the ledger
 
-#### When to Vote Differently
+**When to Vote Differently**
 
 Rarely. Fee changes are network governance decisions. Only deviate if:
 - You're participating in a coordinated network-wide fee adjustment
@@ -617,11 +617,11 @@ Rarely. Fee changes are network governance decisions. Only deviate if:
 
 ---
 
-## Operational Settings
+# Operational Settings
 
 ### log_level
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Run `warning` in production.** Only increase for troubleshooting.
 
@@ -634,7 +634,7 @@ Rarely. Fee changes are network governance decisions. Only deviate if:
 | error | Very low | Very low | Only problems |
 | fatal | Minimal | Negligible | Almost nothing |
 
-#### Configuration
+**Configuration**
 
 Set via `[rpc_startup]` to apply at boot:
 
@@ -643,7 +643,7 @@ Set via `[rpc_startup]` to apply at boot:
 { "command": "log_level", "severity": "warning" }
 ```
 
-#### Runtime Adjustment
+**Runtime Adjustment**
 
 Temporarily increase for debugging without restart:
 
@@ -657,13 +657,13 @@ Then set back:
 rippled log_level warning
 ```
 
-#### Why Not `info`?
+**Why Not `info`?**
 
 The default `info` level logs every ledger close, peer connection, and many routine operations. On a busy validator, this generates significant disk I/O. `warning` logs only things that might need attention.
 
 ### ssl_verify
 
-#### The Bottom Line
+**The Bottom Line**
 
 **Always `1` in production.** Never disable SSL verification.
 
@@ -672,14 +672,14 @@ The default `info` level logs every ledger close, peer connection, and many rout
 1
 ```
 
-#### What It Does
+**What It Does**
 
 | Value | Behavior |
 |-------|----------|
 | 1 | Verify SSL certificates for outbound connections |
 | 0 | Skip verification (INSECURE) |
 
-#### Why It Matters
+**Why It Matters**
 
 rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl.xrplf.org). SSL verification ensures:
 
@@ -687,7 +687,7 @@ rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl
 - No man-in-the-middle can inject a malicious validator list
 - Your node won't trust fake validators
 
-#### When `0` is Acceptable
+**When `0` is Acceptable**
 
 - Local development with self-signed certificates
 - Isolated test networks
@@ -695,10 +695,10 @@ rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl
 
 ---
 
-## Contributing
+# Contributing
 
 This document is maintained by [xrp-validator.grapedrop.xyz](https://xrp-validator.grapedrop.xyz). Contributions, corrections, and additional insights are welcome.
 
 ---
 
-*Last updated: 2026-01-17*
+*Last updated: 2026-01-18*
