@@ -709,9 +709,15 @@ This section provides a complete, production-ready `rippled.cfg` example for a v
 | RAM | 64 GB |
 | Storage | NVMe SSD, 500 GB, 10,000+ IOPS |
 | Network | Gigabit, low latency |
-| OS | Ubuntu 22.04 LTS |
-| Deployment | Native install (not Docker) |
-| Monitoring | Running on same host (localhost access) |
+| OS | Ubuntu 22.04+ LTS |
+| Deployment | Native install (no Docker on validator) |
+| Monitoring | Separate host or localhost (see note below) |
+
+**Monitoring Architecture Note**
+
+For maximum security, run monitoring on a **separate host** from your validator. This eliminates Docker from the validator entirely, reducing attack surface and preventing resource contention during consensus. The validator exposes admin ports only to the monitoring host's private IP.
+
+For simpler setups, monitoring on localhost is acceptable. See [Hardened Architecture Guide](https://github.com/realgrapedrop/xrpl-validator-dashboard/blob/main/docs/HARDENED_ARCHITECTURE.md) for the multi-host approach.
 
 **Complete Validator Configuration**
 
