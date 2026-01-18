@@ -6,6 +6,7 @@ The following recommendations come from real-world validator operations, GitHub 
 
 ## Table of Contents
 
+- [Hardware Requirements](#hardware-requirements)
 - [Node Sizing](#node-sizing)
   - [node_size](#node_size)
 - [Database Management](#database-management)
@@ -22,6 +23,44 @@ The following recommendations come from real-world validator operations, GitHub 
   - [log_level](#log_level)
   - [ssl_verify](#ssl_verify)
 - [Contributing](#contributing)
+
+---
+
+## Hardware Requirements
+
+#### The Bottom Line
+
+**Use x86-64 (Intel/AMD) processors for production.** ARM and Apple Silicon are not officially supported.
+
+| Component | Minimum | Production Recommended |
+|-----------|---------|------------------------|
+| CPU | 64-bit x86-64, 4+ cores | 8+ cores, 3+ GHz |
+| RAM | 16 GB | 32-64 GB |
+| Disk | SSD, 50 GB | NVMe, 10,000+ sustained IOPS |
+| Network | Gigabit | Gigabit, low latency |
+
+#### CPU Architecture
+
+| Architecture | Examples | Production Support |
+|--------------|----------|-------------------|
+| x86-64 (AMD64) | Intel Core, AMD Ryzen, Xeon, EPYC | Fully supported |
+| ARM | Apple Silicon (M1/M2/M3/M4), AWS Graviton, Raspberry Pi | Development only |
+
+AMD Ryzen and Intel processors use the same x86-64 instruction set and are equally supported. ARM-based processors (including Apple Silicon) can compile rippled for development, but are **not recommended for production validators or nodes**.
+
+#### Disk Performance
+
+Storage speed is critical. Requirements:
+
+- **Type**: SSD or NVMe (spinning disks will not work)
+- **IOPS**: 10,000+ sustained (not burst)
+- **Capacity**: 50 GB minimum for database partition
+
+**Avoid AWS EBS** - its latency is too high for reliable sync. If using AWS, consider i3.2xlarge instances with local NVMe storage.
+
+#### Source
+
+See [XRPL System Requirements](https://xrpl.org/docs/infrastructure/installation/system-requirements) for official specifications.
 
 ---
 
