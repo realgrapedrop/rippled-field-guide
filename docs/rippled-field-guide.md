@@ -27,6 +27,7 @@
 - [Operational Settings](#operational-settings)
   - [log_level](#log_level)
   - [ssl_verify](#ssl_verify)
+- [Putting It All Together](#putting-it-all-together)
 - [Contributing](#contributing)
 
 ---
@@ -692,6 +693,222 @@ rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl
 - Local development with self-signed certificates
 - Isolated test networks
 - Never in production
+
+---
+
+# Putting It All Together
+
+This section provides a complete, production-ready `rippled.cfg` example for a validator. Use this as a starting point and adjust for your environment.
+
+**Assumptions**
+
+| Component | Specification |
+|-----------|---------------|
+| Server | Bare metal, dedicated |
+| CPU | 8+ cores, x86-64 (Intel/AMD) |
+| RAM | 64 GB |
+| Storage | NVMe SSD, 500 GB, 10,000+ IOPS |
+| Network | Gigabit, low latency |
+| OS | Ubuntu 22.04 LTS |
+| Deployment | Native install (not Docker) |
+| Monitoring | Running on same host (localhost access) |
+
+**Complete Validator Configuration**
+
+```ini
+#-----------------------------------------------------------------------
+# rippled.cfg - Production Validator Configuration
+#-----------------------------------------------------------------------
+
+#-----------------------------------------------------------------------
+# Node Identity
+#-----------------------------------------------------------------------
+
+[node_size]
+huge
+
+[ledger_history]
+32768
+
+#-----------------------------------------------------------------------
+# Database
+#-----------------------------------------------------------------------
+
+[node_db]
+type=NuDB
+path=/var/lib/rippled/db/nudb
+online_delete=32768
+advisory_delete=0
+
+[database_path]
+/var/lib/rippled/db
+
+[shard_db]
+type=NuDB
+path=/var/lib/rippled/db/shards
+max_historical_shards=1
+
+#-----------------------------------------------------------------------
+# Network - Peers
+#-----------------------------------------------------------------------
+
+[ips_fixed]
+r.ripple.com 51235
+zaphod.alloy.ee 51235
+
+[peer_private]
+1
+
+[peers_max]
+21
+
+[compression]
+true
+
+#-----------------------------------------------------------------------
+# Network - Ports
+#-----------------------------------------------------------------------
+
+[server]
+port_rpc_admin_local
+port_ws_admin_local
+port_peer
+
+[port_rpc_admin_local]
+port = 5005
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = http
+
+[port_ws_admin_local]
+port = 6006
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = ws
+send_queue_limit = 100
+
+[port_peer]
+port = 51235
+ip = 0.0.0.0
+protocol = peer
+
+#-----------------------------------------------------------------------
+# Validator Identity
+#-----------------------------------------------------------------------
+
+# Generate with: validator-keys create_keys
+# Store validator-keys.json OFFLINE in a secure location
+[validator_token]
+# Paste your validator token here (generated from validator-keys create_token)
+
+[validation_public_key]
+# Your validator's public key (starts with nH...)
+
+#-----------------------------------------------------------------------
+# Trust - Validator Lists
+#-----------------------------------------------------------------------
+
+[validator_list_sites]
+https://vl.ripple.com
+https://unl.xrplf.org
+
+[validator_list_keys]
+ED2677ABFFD1B33AC6FBC3062B71F1E8397C1505E1C42C64D11AD1B28FF73F4734
+EDA8BFE0E9C6B09E867B321B64E8E272C6E93A1EC02FDB5CB1070EA01F6C67CBC6
+
+#-----------------------------------------------------------------------
+# Voting
+#-----------------------------------------------------------------------
+
+[voting]
+reference_fee = 10
+account_reserve = 1000000
+owner_reserve = 200000
+
+#-----------------------------------------------------------------------
+# Time Synchronization
+#-----------------------------------------------------------------------
+
+[sntp_servers]
+time.nist.gov
+pool.ntp.org
+time.cloudflare.com
+time.google.com
+
+#-----------------------------------------------------------------------
+# SSL
+#-----------------------------------------------------------------------
+
+[ssl_verify]
+1
+
+#-----------------------------------------------------------------------
+# Logging
+#-----------------------------------------------------------------------
+
+[rpc_startup]
+{ "command": "log_level", "severity": "warning" }
+
+[debug_logfile]
+/var/log/rippled/debug.log
+
+#-----------------------------------------------------------------------
+# Amendment Voting (optional - add amendments you want to veto)
+#-----------------------------------------------------------------------
+
+# [veto_amendments]
+# Amendment_ID_Here
+
+# [amendments]
+# Amendment_ID_Here
+```
+
+**What This Configuration Does**
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `node_size=huge` | 64 GB RAM allocation | Matches our hardware |
+| `online_delete=32768` | ~36 hours between deletes | Prevents I/O storms |
+| `peer_private=1` | Hides validator IP | Security best practice |
+| `peers_max=21` | 21 peer connections | Sufficient for reliable propagation |
+| `compression=true` | LZ4 compression | 60-80% bandwidth savings |
+| Admin ports on `127.0.0.1` | Localhost only | No external admin access |
+| No public WebSocket | Disabled | Validators don't need it |
+| `ssl_verify=1` | Verify certificates | Prevents MITM on UNL fetches |
+| `log_level=warning` | Minimal logging | Reduces disk I/O |
+
+**Post-Configuration Checklist**
+
+1. Generate validator keys: `validator-keys create_keys`
+2. Store `validator-keys.json` offline (encrypted USB)
+3. Generate token: `validator-keys create_token --keyfile validator-keys.json`
+4. Paste token into config
+5. Set file permissions: `chmod 600 /etc/opt/ripple/rippled.cfg`
+6. Configure firewall: only allow port 51235 inbound
+7. Set up domain verification via `.well-known/xrp-ledger.toml`
+8. Start rippled and verify sync: `rippled server_info`
+9. Monitor agreement percentage over time
+
+**Adapting for Docker**
+
+If running rippled in Docker with monitoring tools on the same host, change the admin port bindings:
+
+```ini
+[port_rpc_admin_local]
+port = 5005
+ip = 0.0.0.0
+admin = 127.0.0.1, 172.17.0.0/16, 172.20.0.0/16
+protocol = http
+
+[port_ws_admin_local]
+port = 6006
+ip = 0.0.0.0
+admin = 127.0.0.1, 172.17.0.0/16, 172.20.0.0/16
+protocol = ws
+send_queue_limit = 100
+```
+
+This allows Docker containers to access the admin API while still restricting access to the Docker bridge networks.
 
 ---
 
