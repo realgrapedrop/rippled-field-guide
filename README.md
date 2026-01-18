@@ -173,14 +173,27 @@ Getting on a UNL isn't automatic. It's earned.
 
 ## The Field Guide
 
-This is what you came for. The [Rippled Field Guide](docs/rippled-field-guide.md) contains detailed configuration guidance for specific rippled settings:
+This is what you came for. The [Rippled Field Guide](docs/RIPPLED-FIELD-GUIDE.md) contains detailed configuration guidance for deploying and operating rippled:
 
+**Getting Started**
+- **Deployment Roadmap** - Logical sequence from infrastructure to operations
+
+**Infrastructure & Configuration**
+- **Hardware Requirements** - CPU, RAM, storage, bare metal vs cloud
 - **Node Sizing** - `node_size` parameter and RAM allocation
 - **Database Management** - `online_delete` tuning, I/O storm prevention
-- **Network Configuration** - compression, peer limits, queue settings
+- **Network Configuration** - compression, peer limits
+- **Port Configuration & Security** - port types, `ip` vs `admin`, firewall rules
 - **Time Synchronization** - SNTP server configuration
-- **Fee Voting** - reference fees and reserve settings
 - **Operational Settings** - logging, SSL verification
+
+**Validator Identity & Security**
+- **Domain Verification** - xrp-ledger.toml setup and common mistakes
+- **Validator Keys** - master key security, token management, compromise response
+- **Fee Voting** - reference fees and reserve settings
+
+**Reference**
+- **Putting It All Together** - Complete production rippled.cfg example
 
 Each entry follows the same format:
 1. **Bottom-line recommendation** - what to do
