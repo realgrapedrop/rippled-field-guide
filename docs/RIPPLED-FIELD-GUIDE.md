@@ -1533,6 +1533,10 @@ time.google.com
 
 If running rippled in Docker with monitoring tools (like [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard)) on the same host, you need to understand Docker networking to configure admin ports securely.
 
+<p align="center">
+  <img src="../images/validator-monitoring-docker.png" alt="Docker Networking for Validator Monitoring" width="650">
+</p>
+
 **Why `ip = 0.0.0.0` is Required**
 
 Docker containers run in isolated network namespaces. Each container has its own `127.0.0.1` that other containers cannot reach:
