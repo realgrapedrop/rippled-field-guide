@@ -24,6 +24,10 @@ Running a validator is a responsibility, not just a technical deployment. You ar
 
 Every 3-5 seconds, validators participate in a consensus round to agree on the next ledger. These are your real-time responsibilities:
 
+<p align="center">
+  <img src="images/validator-consensus-participation.png" alt="Validator Consensus Participation" width="500">
+</p>
+
 | Duty | Target | What It Means |
 |------|--------|---------------|
 | **Availability** | 100% uptime | Your validator should be online and participating in every consensus round. The network tracks your performance over the last 256 ledgers. |
