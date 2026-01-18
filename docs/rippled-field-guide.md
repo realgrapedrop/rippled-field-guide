@@ -27,6 +27,10 @@
 - [Operational Settings](#operational-settings)
   - [log_level](#log_level)
   - [ssl_verify](#ssl_verify)
+- [Domain Verification](#domain-verification)
+  - [xrp-ledger.toml](#xrp-ledgertoml)
+  - [Common Mistakes](#common-mistakes)
+  - [Step-by-Step Setup](#step-by-step-setup)
 - [Putting It All Together](#putting-it-all-together)
 - [Contributing](#contributing)
 
@@ -693,6 +697,197 @@ rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl
 - Local development with self-signed certificates
 - Isolated test networks
 - Never in production
+
+---
+
+# Domain Verification
+
+Domain verification establishes a cryptographic link between your validator and a domain you control. This is **required** for UNL consideration and helps the community identify legitimate validators.
+
+### xrp-ledger.toml
+
+**The Bottom Line**
+
+Host a `xrp-ledger.toml` file at `https://YOUR_DOMAIN/.well-known/xrp-ledger.toml` with your validator's public key and attestation.
+
+**What It Does**
+
+The `xrp-ledger.toml` file creates a two-way trust link:
+1. Your validator announces "I belong to this domain" (via rippled config)
+2. Your domain announces "This validator belongs to me" (via the TOML file)
+
+Verification tools check both directions to confirm the link is legitimate.
+
+**File Structure**
+
+```toml
+# xrp-ledger.toml
+
+[METADATA]
+modified = 2024-01-15T00:00:00.000Z
+
+[[VALIDATORS]]
+public_key = "nHUjYWSeiAepbkkrmwmQXFnohhr6Vy5oFK9Gk6TUF6MAT4qSiXSK"
+attestation = "9A379A630BA161A3E7A0969E472FAA82C1542FF24C412250C86AAEF55209DD35..."
+network = "main"
+owner_country = "US"
+server_country = "DE"
+unl = "https://vl.ripple.com"
+
+[[PRINCIPALS]]
+name = "Your Name or Organization"
+email = "validator@example.com"
+```
+
+**Field Reference**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `public_key` | Yes | Master public key (starts with `n`) |
+| `attestation` | Yes | Hex signature linking validator to domain |
+| `network` | Yes | `main`, `testnet`, or custom chain ID |
+| `owner_country` | No | Two-letter ISO country code (owner jurisdiction) |
+| `server_country` | No | Two-letter ISO country code (server location) |
+| `unl` | No | URL of validator list you follow |
+
+> **Note:** Use `[[VALIDATORS]]` with double brackets. This is TOML array-of-tables syntax. Single brackets `[VALIDATORS]` will fail.
+
+### Common Mistakes
+
+**1. Domain Mismatch (Most Common)**
+
+The domain in your attestation must **exactly match** where the TOML is served:
+
+| TOML Location | Domain Must Be |
+|---------------|----------------|
+| `https://example.com/.well-known/xrp-ledger.toml` | `example.com` |
+| `https://www.example.com/.well-known/xrp-ledger.toml` | `www.example.com` |
+| `https://validator.example.com/.well-known/xrp-ledger.toml` | `validator.example.com` |
+
+If you run the `set_domain` command with `example.com` but serve the TOML from `www.example.com`, verification will fail.
+
+**2. Missing CORS Headers**
+
+Verification tools run in browsers and need CORS enabled. Without it, requests are blocked.
+
+**Nginx:**
+```nginx
+location /.well-known/xrp-ledger.toml {
+    default_type application/toml;
+    add_header 'Access-Control-Allow-Origin' '*';
+}
+```
+
+**Apache:**
+```apache
+<Location "/.well-known/xrp-ledger.toml">
+    Header set Access-Control-Allow-Origin "*"
+</Location>
+```
+
+**3. SSL/TLS Issues**
+
+- Must use HTTPS (not HTTP)
+- Must use a valid certificate from a recognized CA
+- Self-signed certificates will fail
+- Expired certificates will fail
+
+**4. Wrong Path**
+
+The path `/.well-known/xrp-ledger.toml` is case-sensitive. Common mistakes:
+- `/.well-known/XRP-Ledger.toml` (wrong case)
+- `/xrp-ledger.toml` (missing .well-known)
+- `/.well_known/xrp-ledger.toml` (underscore instead of hyphen)
+
+**5. Hosting TOML on Validator**
+
+> **Security Warning:** Do NOT run a web server on your validator. Host the TOML file on a separate machine.
+
+**6. Confusing Public Key with Token**
+
+| Safe to Share | NEVER Share |
+|---------------|-------------|
+| `public_key` (starts with `n`) | `validator_token` |
+| `attestation` | `validator-keys.json` contents |
+| Contact info | Master private key |
+
+### Step-by-Step Setup
+
+**Prerequisites**
+- Domain with HTTPS web server (not on your validator)
+- Valid SSL certificate from a recognized CA
+- Access to your `validator-keys.json` (stored offline)
+
+**Step 1: Generate Attestation**
+
+On a secure machine with your `validator-keys.json`:
+
+```bash
+validator-keys set_domain YOUR_DOMAIN.COM
+```
+
+Output:
+```
+The domain attestation for validator nHDG5CRU... is:
+
+attestation="A59AB577E14A7BEC053752FBFE78C3DE..."
+
+Update rippled.cfg with this validator token:
+
+[validator_token]
+eyJ2YWxpZGF0...
+```
+
+**Step 2: Create TOML File**
+
+```toml
+[METADATA]
+modified = 2024-01-15T00:00:00.000Z
+
+[[VALIDATORS]]
+public_key = "nHDG5CRUHp17ShsEdRweMc7WsA4csiL7qEjdZbRVTr74wa5QyqoF"
+attestation = "A59AB577E14A7BEC053752FBFE78C3DED6DCEC81A7C41DF1931BC61742BB4FAE..."
+network = "main"
+owner_country = "US"
+
+[[PRINCIPALS]]
+name = "Your Organization"
+email = "validator@yourdomain.com"
+```
+
+**Step 3: Deploy TOML**
+
+Upload to your web server at `/.well-known/xrp-ledger.toml`
+
+**Step 4: Configure CORS**
+
+Add CORS headers (see Nginx/Apache examples above).
+
+**Step 5: Update rippled.cfg**
+
+On your validator, update the token from Step 1:
+
+```ini
+[validator_token]
+eyJ2YWxpZGF0aW9uX3NlY3JldF9r...
+```
+
+Restart rippled:
+```bash
+sudo systemctl restart rippled
+```
+
+**Step 6: Verify**
+
+1. Browser check: Visit `https://YOUR_DOMAIN/.well-known/xrp-ledger.toml`
+2. [TOML Checker](https://xrpl.org/resources/dev-tools/xrp-ledger-toml-checker)
+3. [Domain Verifier](https://xrpl.org/resources/dev-tools/domain-verifier)
+
+> **Note:** Third-party sites like [Bithomp](https://bithomp.com/en/domains) and [XRPSCAN](https://xrpscan.com/validators) may take up to 24 hours to reflect your verified domain.
+
+**Source**
+
+See [xrp-ledger.toml specification](https://xrpl.org/docs/references/xrp-ledger-toml) for complete field reference.
 
 ---
 
