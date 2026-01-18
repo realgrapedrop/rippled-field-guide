@@ -19,65 +19,48 @@ If you're reading this, you've hopefully already reviewed the [README](../README
 
 ### Deployment Phases
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  PHASE 1: INFRASTRUCTURE                                            │
-│  ─────────────────────────────────────────────────────────────────  │
-│  → Hardware selection (RAM, CPU, storage)                           │
-│  → Hosting decision (bare metal preferred)                          │
-│  → OS setup (Ubuntu 22.04+)                                         │
-│  → Network/firewall configuration                                   │
-│                                                                     │
-│  Field Guide Sections: Hardware Requirements                        │
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  PHASE 2: INSTALLATION & CONFIGURATION                              │
-│  ─────────────────────────────────────────────────────────────────  │
-│  → Install rippled package                                          │
-│  → Configure rippled.cfg                                            │
-│  → Start service and sync                                           │
-│                                                                     │
-│  Field Guide Sections: Node Sizing, Database Management,            │
-│  Network Configuration, Time Synchronization, Operational Settings  │
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  PHASE 3: SECURITY (Required for Validators)                        │
-│  ─────────────────────────────────────────────────────────────────  │
-│  → Port hardening (admin ports, peer_private)                       │
-│  → Firewall rules                                                   │
-│  → Key generation (OFFLINE)                                         │
-│  → Token management                                                 │
-│                                                                     │
-│  Field Guide Sections: Port Configuration & Security, Validator Keys│
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  PHASE 4: IDENTITY (Validators Only)                                │
-│  ─────────────────────────────────────────────────────────────────  │
-│  → Domain verification (xrp-ledger.toml)                            │
-│  → Fee voting configuration                                         │
-│  → Community presence                                               │
-│                                                                     │
-│  Field Guide Sections: Domain Verification, Fee Voting              │
-└─────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  PHASE 5: OPERATIONS                                                │
-│  ─────────────────────────────────────────────────────────────────  │
-│  → Monitoring setup                                                 │
-│  → Alerting configuration                                           │
-│  → Maintenance procedures                                           │
-│  → Reputation building (12+ months for UNL consideration)           │
-│                                                                     │
-│  Field Guide Sections: Putting It All Together                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
+**Phase 1: Infrastructure**
+
+- Hardware selection (RAM, CPU, storage)
+- Hosting decision (bare metal preferred)
+- OS setup (Ubuntu 22.04+)
+- Network/firewall configuration
+
+*Field Guide Sections:* [Hardware Requirements](#hardware-requirements)
+
+**Phase 2: Installation & Configuration**
+
+- Install rippled package
+- Configure rippled.cfg
+- Start service and sync
+
+*Field Guide Sections:* [Node Sizing](#node-sizing), [Database Management](#database-management), [Network Configuration](#network-configuration), [Time Synchronization](#time-synchronization), [Operational Settings](#operational-settings)
+
+**Phase 3: Security** *(Required for Validators)*
+
+- Port hardening (admin ports, peer_private)
+- Firewall rules
+- Key generation (OFFLINE)
+- Token management
+
+*Field Guide Sections:* [Port Configuration & Security](#port-configuration--security), [Validator Keys](#validator-keys)
+
+**Phase 4: Identity** *(Validators Only)*
+
+- Domain verification (xrp-ledger.toml)
+- Fee voting configuration
+- Community presence
+
+*Field Guide Sections:* [Domain Verification](#domain-verification), [Fee Voting](#fee-voting)
+
+**Phase 5: Operations**
+
+- Monitoring setup
+- Alerting configuration
+- Maintenance procedures
+- Reputation building (12+ months for UNL consideration)
+
+*Field Guide Sections:* [Putting It All Together](#putting-it-all-together)
 
 ### Critical Dependencies
 
