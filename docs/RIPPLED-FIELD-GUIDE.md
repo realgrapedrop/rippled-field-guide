@@ -486,6 +486,10 @@ rippled uses four types of ports, each serving a different purpose:
 | **WebSocket Admin** | 6006 | ws | Administrative WebSocket API. Same privileged access as RPC. |
 | **WebSocket Public** | 5006 | ws | Public WebSocket API for clients. Subscribe to streams, submit transactions. |
 
+<p align="center">
+  <img src="../images/validator-port-security.png" alt="Validator Port Security Zones" width="700">
+</p>
+
 **The Bottom Line**
 
 **Only port 51235 (peer) should be exposed to the internet.** Admin ports must be restricted to trusted IPs. Public WebSocket is optional and should be disabled on validators unless you have a specific need.
