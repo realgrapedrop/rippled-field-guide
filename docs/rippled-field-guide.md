@@ -225,7 +225,7 @@ advisory_delete=0
 32768
 ```
 
-**Note:** `ledger_history` must be ≤ `online_delete`.
+> **Note:** `ledger_history` must be ≤ `online_delete`.
 
 **Verifying the Change**
 
@@ -715,9 +715,9 @@ This section provides a complete, production-ready `rippled.cfg` example for a v
 
 **Monitoring Architecture Note**
 
-For maximum security, run monitoring on a **separate host** from your validator. This eliminates Docker from the validator entirely, reducing attack surface and preventing resource contention during consensus. The validator exposes admin ports only to the monitoring host's private IP.
-
-For simpler setups, monitoring on localhost is acceptable. See [Hardened Architecture Guide](https://github.com/realgrapedrop/xrpl-validator-dashboard/blob/main/docs/HARDENED_ARCHITECTURE.md) for the multi-host approach.
+> For maximum security, run monitoring on a **separate host** from your validator. This eliminates Docker from the validator entirely, reducing attack surface and preventing resource contention during consensus. The validator exposes admin ports only to the monitoring host's private IP.
+>
+> For simpler setups, monitoring on localhost is acceptable. See [Hardened Architecture Guide](https://github.com/realgrapedrop/xrpl-validator-dashboard/blob/main/docs/HARDENED_ARCHITECTURE.md) for the multi-host approach.
 
 **Complete Validator Configuration**
 
