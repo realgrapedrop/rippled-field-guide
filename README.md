@@ -117,9 +117,9 @@ You can't fix what you can't see. Monitor:
 - **Peer connections**: Healthy count, no sudden drops.
 - **Ledger sync**: Are you keeping up with the network?
 
-For a turnkey solution, the [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard) provides real-time monitoring built specifically for validator operators. It tracks 40+ metrics via WebSocket streams, includes pre-configured alerts for critical states, and supports Discord, Slack, PagerDuty, and other notification channels. Deploys in minutes with Docker.
+For a turnkey solution, the [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard) provides real-time monitoring built specifically for validator operators. It tracks 40+ metrics via rippled's WebSocket and HTTP APIs, includes pre-configured alerts for critical states, and supports Discord, Slack, PagerDuty, and other notification channels. Deploys as a single Docker stack - no libraries or dependencies on your rippled machine. Can run on a separate machine entirely for better security (see the [hardened security guide](https://github.com/realgrapedrop/xrpl-validator-dashboard#hardened-security)).
 
-For custom setups, Prometheus + Grafana is a solid stack. Alert on meaningful thresholds, not every blip.
+Prometheus + Grafana can monitor system metrics (CPU, memory, disk I/O) but not rippled-specific metrics like server state, agreement percentage, or peer connections. Use it as a complement, not a replacement.
 
 ### Upgrades
 
