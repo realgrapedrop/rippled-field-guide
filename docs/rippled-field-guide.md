@@ -31,6 +31,11 @@
   - [xrp-ledger.toml](#xrp-ledgertoml)
   - [Common Mistakes](#common-mistakes)
   - [Step-by-Step Setup](#step-by-step-setup)
+- [Validator Keys](#validator-keys)
+  - [Key Hierarchy](#key-hierarchy)
+  - [Key Generation](#key-generation)
+  - [Token Management](#token-management)
+  - [Key Compromise Response](#key-compromise-response)
 - [Putting It All Together](#putting-it-all-together)
 - [Contributing](#contributing)
 
@@ -888,6 +893,201 @@ sudo systemctl restart rippled
 **Source**
 
 See [xrp-ledger.toml specification](https://xrpl.org/docs/references/xrp-ledger-toml) for complete field reference.
+
+---
+
+# Validator Keys
+
+Validator key management is the most critical security aspect of running a validator. Understanding the key hierarchy and keeping your master key offline protects your validator identity.
+
+### Key Hierarchy
+
+**The Bottom Line**
+
+**Keep your master key offline. Always.** Use validator tokens for day-to-day operations.
+
+The XRP Ledger uses a three-tier key architecture:
+
+| Key Type | Purpose | Storage | Used For |
+|----------|---------|---------|----------|
+| **Master Key** | Permanent identity | Offline (encrypted USB, air-gapped) | Signing manifests and tokens |
+| **Ephemeral Key** | Daily signing | Inside validator token | Signing validations |
+| **Validator Token** | Authorization | rippled.cfg on server | Authorizes rippled to validate |
+
+**How It Works**
+
+1. Your **master key** defines your permanent public identity (the `nH...` address that appears on UNLs)
+2. You use the master key to sign a **manifest** that delegates authority to an **ephemeral key**
+3. The **validator token** contains the manifest plus the ephemeral private key
+4. rippled uses the ephemeral key to sign validations during consensus
+5. If the token is compromised, generate a new one - your identity survives
+
+> **Security Model:** By keeping the master key offline, a server compromise only exposes the ephemeral key. You can rotate tokens without changing your validator identity or requiring UNL updates.
+
+### Key Generation
+
+**Generate Keys (Offline)**
+
+On an air-gapped machine or secure workstation (not your validator):
+
+```bash
+validator-keys create_keys
+```
+
+Output:
+```
+Validator keys stored in ~/.ripple/validator-keys.json
+
+This file should be stored securely and not shared.
+```
+
+**The validator-keys.json File**
+
+```json
+{
+  "key_type": "ed25519",
+  "public_key": "nHD9jtA9y1nWC2Fs1HeRkEisqV3iFpk12wHmHi3mQxQwUP1ywUKs",
+  "secret_key": "paLsUUm9bRrvNBPpvJQ4nF7vdRTZyDNofGMMYs9EDeEKeNJa99q",
+  "revoked": false,
+  "token_sequence": 0
+}
+```
+
+| Field | Description | Share? |
+|-------|-------------|--------|
+| `public_key` | Your validator's permanent identity | Yes - this is public |
+| `secret_key` | Master private key | **NEVER** |
+| `token_sequence` | Token counter (must always increase) | No |
+| `revoked` | Whether key has been revoked | N/A |
+
+**Generate a Token (Offline)**
+
+```bash
+validator-keys create_token --keyfile ~/.ripple/validator-keys.json
+```
+
+Output:
+```
+[validator_token]
+eyJtYW5pZmVzdCI6IkFBQUFBVUZ4R0Z3S3RjdTlLS0E4Y0FRVEhWVGJkVG9...
+```
+
+Copy this token to your validator's `rippled.cfg`.
+
+### Token Management
+
+**When to Rotate Tokens**
+
+- A sysadmin with config access leaves your organization
+- You suspect the token may have been exposed
+- After any security incident on the validator server
+- Routine security hygiene (periodic rotation)
+
+**How to Rotate**
+
+1. Generate new token (offline):
+   ```bash
+   validator-keys create_token --keyfile ~/.ripple/validator-keys.json
+   ```
+
+2. Update rippled.cfg on validator with new `[validator_token]`
+
+3. Restart rippled:
+   ```bash
+   sudo systemctl restart rippled
+   ```
+
+4. **Update your backup** of validator-keys.json (token_sequence incremented)
+
+**What Happens on Rotation**
+
+- New token invalidates all previous tokens automatically
+- Other servers adapt automatically when they see the new manifest
+- **No UNL updates required** - your master public key stays the same
+- Your validator continues operating with the same identity
+
+> **Critical:** Always update your backup after generating a token. The `token_sequence` must always increase. If you restore an old backup and generate a token with a lower sequence number, the network ignores it.
+
+### Key Compromise Response
+
+**Scenario A: Token Compromised (Server Breach)**
+
+Severity: Recoverable
+
+1. Generate new token immediately (from offline master key)
+2. Update rippled.cfg
+3. Restart rippled
+4. New token invalidates the compromised one
+
+**Impact:** None to others. Your identity survives.
+
+**Scenario B: Master Key Compromised**
+
+Severity: **Critical - Permanent Identity Loss**
+
+1. Generate revocation (offline):
+   ```bash
+   validator-keys revoke_keys --keyfile ~/.ripple/validator-keys.json
+   ```
+
+2. Add to rippled.cfg:
+   ```ini
+   [validator_key_revocation]
+   JP////9xIe0hvssbqmgzFH4/NDp1z...
+   ```
+
+3. Restart rippled
+4. Generate entirely new keys
+5. **Contact UNL publishers** - everyone must update to your new public key
+
+**Impact:** Your old validator identity is permanently dead. Requires coordination with all parties who trust you.
+
+**Comparison**
+
+| Aspect | Token Compromise | Master Key Compromise |
+|--------|------------------|----------------------|
+| Retain identity? | Yes | No |
+| Others must act? | No | Yes - all UNL updates |
+| Recovery time | Minutes | Days/weeks |
+| Preventable? | Minimize server exposure | Keep master key offline |
+
+### Common Mistakes
+
+**1. Storing Master Key on Validator**
+
+If the server is compromised, attacker owns your identity forever.
+
+**2. Not Backing Up Keys**
+
+If you lose validator-keys.json, you lose your identity permanently. Store encrypted backups in multiple secure locations.
+
+**3. Not Updating Backups After Token Generation**
+
+If you restore an old backup with lower `token_sequence`, new tokens are ignored by the network.
+
+**4. Using Legacy validation_seed**
+
+The old `[validation_seed]` method has no token rotation capability. Migrate to `[validator_token]`.
+
+**Command Reference**
+
+```bash
+# Generate new keys (OFFLINE)
+validator-keys create_keys
+
+# Generate token (OFFLINE)
+validator-keys create_token --keyfile ~/.ripple/validator-keys.json
+
+# Set domain for verification (OFFLINE)
+validator-keys set_domain example.com --keyfile ~/.ripple/validator-keys.json
+
+# Revoke keys permanently (OFFLINE)
+validator-keys revoke_keys --keyfile ~/.ripple/validator-keys.json
+```
+
+**Source**
+
+See [validator-keys-tool guide](https://github.com/ripple/validator-keys-tool/blob/master/doc/validator-keys-tool-guide.md) for complete documentation.
 
 ---
 
