@@ -103,6 +103,10 @@ Your validator is a target. Design accordingly.
 - Use validator tokens for the running server. These can be rotated if compromised.
 - Config file permissions: `chmod 600`.
 
+<p align="center">
+  <img src="images/validator-key-hierarchy.png" alt="Validator Key Hierarchy" width="500">
+</p>
+
 ### Docker vs. Bare Metal
 
 **Official recommendation: bare metal.**

@@ -1034,6 +1034,10 @@ See [xrp-ledger.toml specification](https://xrpl.org/docs/references/xrp-ledger-
 
 Validator key management is the most critical security aspect of running a validator. Understanding the key hierarchy and keeping your master key offline protects your validator identity.
 
+<p align="center">
+  <img src="../images/validator-key-hierarchy.png" alt="Validator Key Hierarchy" width="600">
+</p>
+
 ### Key Hierarchy
 
 **The Bottom Line**
