@@ -56,7 +56,14 @@ Storage speed is critical. Requirements:
 - **IOPS**: 10,000+ sustained (not burst)
 - **Capacity**: 50 GB minimum for database partition
 
-**Avoid AWS EBS** - its latency is too high for reliable sync. If using AWS, consider i3.2xlarge instances with local NVMe storage.
+**Prefer bare metal over cloud.** Hyperscalers (AWS, Azure, OCI) introduce multiple issues for validators:
+
+- **Noisy neighbors**: Shared physical hardware means other tenants can spike resource usage, throttling your validator during critical consensus moments
+- **Network bandwidth limits**: Cloud VMs have baseline bandwidth with burst credits that deplete under sustained load. For example, AWS c5.large has only 750 Mbps baseline but advertises "up to 10 Gbps" - that burst lasts just 5 minutes before throttling kicks in
+- **Storage I/O throttling**: EBS and equivalent block storage have IOPS burst credits. EC2 instances also have aggregate EBS bandwidth limits (e.g., r6i.xlarge drops from 40K to 6K IOPS after 30 minutes of sustained load)
+- **Microburst penalties**: Short spikes in demand trigger throttling even when average utilization appears low - CloudWatch metrics aren't granular enough to detect millisecond-level bursts
+
+If cloud is unavoidable, use instances with local NVMe storage (AWS i3/i4 series, Azure Lsv2, OCI Dense I/O) and dedicated network bandwidth ("n" suffix instances on AWS like C5n, M5n).
 
 #### Source
 
