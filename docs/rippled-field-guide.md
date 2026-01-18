@@ -15,7 +15,12 @@ The following recommendations come from real-world validator operations, GitHub 
 - [Network Configuration](#network-configuration)
   - [compression](#compression)
   - [peers_max](#peers_max)
+- [Port Configuration & Security](#port-configuration--security)
+  - [Port Types](#port-types)
+  - [Understanding ip vs admin](#understanding-ip-vs-admin)
   - [send_queue_limit](#send_queue_limit)
+  - [Security Patterns](#security-patterns)
+  - [Firewall Rules](#firewall-rules)
 - [Time Synchronization](#time-synchronization)
   - [sntp_servers](#sntp_servers)
 - [Fee Voting](#fee-voting)
@@ -322,6 +327,79 @@ Validators receive transactions from the network and propagate validations. They
 21
 ```
 
+---
+
+## Port Configuration & Security
+
+### Port Types
+
+rippled uses four types of ports, each serving a different purpose:
+
+| Port | Default | Protocol | Purpose |
+|------|---------|----------|---------|
+| **Peer** | 51235 | peer | Node-to-node communication. The only port that should be publicly accessible. |
+| **RPC Admin** | 5005 | http | Administrative JSON-RPC API. Privileged commands like `stop`, `validation_seed`. |
+| **WebSocket Admin** | 6006 | ws | Administrative WebSocket API. Same privileged access as RPC. |
+| **WebSocket Public** | 5006 | ws | Public WebSocket API for clients. Subscribe to streams, submit transactions. |
+
+#### The Bottom Line
+
+**Only port 51235 (peer) should be exposed to the internet.** Admin ports must be restricted to trusted IPs. Public WebSocket is optional and should be disabled on validators unless you have a specific need.
+
+### Understanding ip vs admin
+
+This is the most commonly misunderstood part of rippled configuration. These two parameters do different things:
+
+| Parameter | What It Does | Security Role |
+|-----------|--------------|---------------|
+| `ip` | Which network interface to bind to | Controls who can connect at the network level |
+| `admin` | Which IPs can run privileged commands | Controls who can execute admin commands after connecting |
+
+#### The Dangerous Pattern
+
+```ini
+# DON'T DO THIS - exposes admin to the internet
+[port_rpc_admin_local]
+port = 5005
+ip = 0.0.0.0
+admin = 0.0.0.0
+protocol = http
+```
+
+With `admin = 0.0.0.0`, anyone who can reach port 5005 can run `stop`, dump your validator keys, or worse.
+
+#### The Safe Patterns
+
+**Pattern 1: Localhost only (simplest)**
+```ini
+[port_rpc_admin_local]
+port = 5005
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = http
+```
+Only local processes can connect. Use this if monitoring runs on the same machine.
+
+**Pattern 2: Docker-friendly (single host)**
+```ini
+[port_rpc_admin_local]
+port = 5005
+ip = 0.0.0.0
+admin = 127.0.0.1, 172.17.0.0/16, 172.18.0.0/16
+protocol = http
+```
+Binds to all interfaces but restricts admin commands to localhost and Docker bridge networks. Use this when monitoring runs in Docker containers on the same host.
+
+**Pattern 3: Hardened multi-host**
+```ini
+[port_rpc_admin_local]
+port = 5005
+ip = 10.0.0.10
+admin = 10.0.0.10, 10.0.0.20
+protocol = http
+```
+Binds only to the private network interface. Admin restricted to the validator itself and a specific monitoring host. Use this for production validators with separate monitoring infrastructure.
+
 ### send_queue_limit
 
 #### The Bottom Line
@@ -337,12 +415,51 @@ Controls how many outbound messages can queue per WebSocket connection before ri
 | Admin WS | 100 | Local connections are fast |
 | Public WS | 500 | Remote clients may be slower |
 
-#### Configuration
+Higher values tolerate slower clients but use more memory per connection.
+
+### Security Patterns
+
+#### Validator Configuration (recommended)
+
+Validators should minimize attack surface. Disable public WebSocket unless needed:
 
 ```ini
+[port_rpc_admin_local]
+port = 5005
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = http
+
 [port_ws_admin_local]
 port = 6006
 ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = ws
+send_queue_limit = 100
+
+[port_peer]
+port = 51235
+ip = 0.0.0.0
+protocol = peer
+```
+
+No public WebSocket. Admin only on localhost. Only peer port exposed.
+
+#### Stock Node with Public API
+
+If you're running a public API node:
+
+```ini
+[port_rpc_admin_local]
+port = 5005
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = http
+
+[port_ws_admin_local]
+port = 6006
+ip = 127.0.0.1
+admin = 127.0.0.1
 protocol = ws
 send_queue_limit = 100
 
@@ -351,9 +468,66 @@ port = 5006
 ip = 0.0.0.0
 protocol = ws
 send_queue_limit = 500
+
+[port_peer]
+port = 51235
+ip = 0.0.0.0
+protocol = peer
 ```
 
-Higher values tolerate slower clients but use more memory per connection.
+#### Docker with External Monitoring
+
+When monitoring tools (like [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard)) run in Docker:
+
+```ini
+[port_rpc_admin_local]
+port = 5005
+ip = 0.0.0.0
+admin = 127.0.0.1, 172.17.0.0/16, 172.20.0.0/16
+protocol = http
+
+[port_ws_admin_local]
+port = 6006
+ip = 0.0.0.0
+admin = 127.0.0.1, 172.17.0.0/16, 172.20.0.0/16
+protocol = ws
+send_queue_limit = 100
+
+[port_peer]
+port = 51235
+ip = 0.0.0.0
+protocol = peer
+```
+
+The `172.x.x.x` ranges cover Docker's default bridge networks. Adjust if you use custom Docker networks.
+
+### Firewall Rules
+
+Defense in depth. Even with correct `ip` and `admin` settings, use firewall rules:
+
+```bash
+# Allow peer protocol from anywhere
+sudo ufw allow 51235/tcp
+
+# Allow admin ports only from specific IPs (if needed)
+sudo ufw allow from 10.0.0.20 to any port 5005
+sudo ufw allow from 10.0.0.20 to any port 6006
+
+# Deny admin ports from everywhere else (implicit with ufw, explicit with iptables)
+```
+
+#### What to Expose
+
+| Port | Public Internet | Private Network | Localhost |
+|------|-----------------|-----------------|-----------|
+| 51235 (peer) | Yes | Yes | Yes |
+| 5005 (RPC admin) | **Never** | If needed | Yes |
+| 6006 (WS admin) | **Never** | If needed | Yes |
+| 5006 (WS public) | Optional | Optional | Yes |
+
+#### Source
+
+For hardened multi-host architectures, see [Hardened Architecture Guide](https://github.com/realgrapedrop/xrpl-validator-dashboard/blob/main/docs/HARDENED_ARCHITECTURE.md).
 
 ---
 
