@@ -173,7 +173,7 @@ Getting on a UNL isn't automatic. It's earned.
 
 ## The Field Guide
 
-The [Rippled Field Guide](docs/rippled-field-guide.md) contains detailed configuration guidance for specific rippled settings:
+This is what you came for. The [Rippled Field Guide](docs/rippled-field-guide.md) contains detailed configuration guidance for specific rippled settings:
 
 - **Node Sizing** - `node_size` parameter and RAM allocation
 - **Database Management** - `online_delete` tuning, I/O storm prevention
