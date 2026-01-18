@@ -469,6 +469,12 @@ Validators receive transactions from the network and propagate validations. They
 
 # Port Configuration & Security
 
+Understanding port configuration is critical for validator security. The sentry architecture diagram below shows how a properly configured validator exposes only the peer port (51235) through its stock nodes, keeping admin ports locked to localhost.
+
+<p align="center">
+  <img src="../images/validator-sentry-architecture.png" alt="Validator Sentry Architecture" width="700">
+</p>
+
 ### Port Types
 
 rippled uses four types of ports, each serving a different purpose:

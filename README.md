@@ -82,6 +82,10 @@ Don't cheap out. Validators are latency-sensitive and I/O-intensive.
 
 Your validator is a target. Design accordingly.
 
+<p align="center">
+  <img src="images/validator-sentry-architecture.png" alt="Validator Sentry Architecture" width="700">
+</p>
+
 **Infrastructure:**
 - Run on **bare metal** or dedicated servers. Not VMs, not shared hosting.
 - Data center with redundant power, cooling, and physical security.
