@@ -67,10 +67,12 @@ Don't cheap out. Validators are latency-sensitive and I/O-intensive.
 
 | Component | Recommended | Notes |
 |-----------|-------------|-------|
-| **CPU** | 8+ cores, 3+ GHz | x86_64 only. ARM/Apple Silicon not production-ready. |
+| **CPU** | 8+ cores, 3+ GHz | x86-64 only (Intel/AMD). See note below. |
 | **RAM** | 32-64 GB | Match with `node_size=huge` in config. |
 | **Storage** | NVMe SSD | 10,000+ sustained IOPS. **No Amazon EBS.** |
 | **Network** | Low-latency, redundant | Multiple ISP connections if possible. |
+
+**CPU Architecture Note:** AMD Ryzen, Intel Core, Xeon, and EPYC are all x86-64 and fully supported. ARM processors (Apple Silicon M1/M2/M3/M4, AWS Graviton, Raspberry Pi) can compile rippled for development but are not recommended for production. See [XRPL System Requirements](https://xrpl.org/docs/infrastructure/installation/system-requirements).
 
 ### Security Architecture
 
