@@ -53,7 +53,11 @@ Governance voting is configured in `rippled.cfg` or via the admin API. This is d
 
 ### The Stakes
 
-The XRP Ledger doesn't have slashing penalties. If you misbehave or go offline, you won't lose funds. But you will lose something more valuable: **trust**.
+Unlike proof-of-work or proof-of-stake networks, the XRP Ledger offers **no direct economic incentives** for running a validator. There are no block rewards, no staking yields, no transaction fee distributions. So why do people run validators?
+
+Validators run because they have a stake in the network's success. Exchanges need reliable transaction processing. Businesses building on XRPL need the network to function. Individuals who hold XRP benefit from network health. The lack of direct rewards filters for operators who are genuinely invested in the ecosystem rather than mercenary miners chasing the highest yield.
+
+The XRP Ledger also doesn't have slashing penalties. If you misbehave or go offline, you won't lose funds. But you will lose something more valuable: **trust**.
 
 Poor performers get added to the **Negative UNL**, a list of validators the network temporarily ignores for consensus calculations. Persistent problems lead to removal from UNL publisher lists entirely. Your reputation takes years to build and moments to destroy.
 
@@ -158,6 +162,14 @@ Getting on a UNL isn't automatic. It's earned.
 | **Separate entity** | Not an employee of an existing validator operator. |
 | **Geographic diversity** | Different data centers, regions, and jurisdictions strengthen the network. |
 | **Public identity** | The community should know who you are. |
+
+**Why Identity Matters**
+
+The XRP Ledger's trust model is fundamentally different from proof-of-work or proof-of-stake. There's no mining power or staked capital to lose. Instead, the network relies on **reputation and accountability**.
+
+When you add a validator to your UNL, you're saying "I trust this operator not to collude against the network." That trust requires knowing who you're trusting. Anonymous operators may be technically competent, but anonymity removes accountability. If something goes wrong, there's no reputation at stake, no entity to answer questions, and no way to coordinate on fixes.
+
+This is why UNL publishers prioritize validators with verified domains, public identities, and community presence. Identity is the collateral in a trust-based system.
 
 ### Building Your Reputation
 

@@ -1230,6 +1230,7 @@ Use these to verify your node's visibility and check network status:
 | Resource | URL | What It Shows |
 |----------|-----|---------------|
 | **XRPL Explorer** | [livenet.xrpl.org](https://livenet.xrpl.org) | Official explorer. Account lookups, transactions, validator list at `/network/validators` |
+| **Bithomp** | [bithomp.com](https://bithomp.com) | Explorer with validator tracking, domain verification status, and account analytics |
 | **XRPL Cluster** | [xrplcluster.com](https://xrplcluster.com) | Community WebSocket endpoint with geographic routing. Stats at [xrpl.ws-stats.com](https://xrpl.ws-stats.com) |
 
 ### Validator Directories
