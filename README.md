@@ -12,7 +12,7 @@ Operational intelligence for XRP Ledger validators and stock nodes. Compiled fro
 
 rippled is the software that powers this network. It validates transactions, maintains the ledger history, and participates in the consensus process. You can run rippled as a **stock node** (tracking the ledger, serving API requests) or as a **validator** (actively participating in consensus and voting on the network's future).
 
-The XRP Ledger has been operating continuously since 2012, processing over 2 billion transactions with no downtime. It handles 1,500+ transactions per second with settlement finality in seconds, not minutes or hours.
+The XRP Ledger has been operating continuously since 2012, processing over 3.8 billion transactions with no downtime. It handles 1,500+ transactions per second with settlement finality in seconds, not minutes or hours.
 
 ---
 
