@@ -843,6 +843,10 @@ rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl
 
 Domain verification establishes a cryptographic link between your validator and a domain you control. This is **required** for UNL consideration and helps the community identify legitimate validators.
 
+<p align="center">
+  <img src="../images/validator-domain-verification.png" alt="Validator Domain Verification Flow" width="650">
+</p>
+
 ### xrp-ledger.toml
 
 **The Bottom Line**
