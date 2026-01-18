@@ -1,12 +1,16 @@
 # **__THE RIPPLED FIELD GUIDE__**
 
-*The following recommendations come from real-world validator operations, GitHub issues, and direct input from rippled engineers. This guidance is based on years of core insights and lessons learned the hard way, your cliff notes to bootstrap your rippled node or validator.*
+*A practical companion to [Running an XRP Ledger Validator](https://xrpl.org/blog/2020/running-an-xrp-ledger-validator) from xrpl.org.*
+
+That guide explains the **why**: how consensus works, what validators do, and why you'd want to run one. This guide covers the **how**: practical configuration, hard-won lessons, and operational insights compiled into a single reference.
+
+The goal is simple. Get you from zero to a running, properly configured rippled node without hunting through GitHub issues, mailing lists, and scattered documentation. The recommendations here come from real-world validator operations, core developer input, and lessons learned the hard way.
 
 ---
 
 # Deployment Roadmap
 
-If you're reading this, you've hopefully already reviewed the [README](../README.md) and understand what you're getting into. Running a rippled node or validator is a commitment. This section maps out the logical sequence so you don't miss critical steps or do things out of order.
+Start with the [README](../README.md) to understand the commitment. Then come back here for the implementation details. Running a rippled node or validator is a commitment. This section maps out the logical sequence so you don't miss critical steps or do things out of order.
 
 ### The First Decision: Stock Node or Validator?
 
