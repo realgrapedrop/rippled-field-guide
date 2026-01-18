@@ -58,9 +58,18 @@ If you're reading this, you've hopefully already reviewed the [README](../README
 - Monitoring setup
 - Alerting configuration
 - Maintenance procedures
-- Reputation building (12+ months for UNL consideration)
 
 *Field Guide Sections:* [Putting It All Together](#putting-it-all-together)
+
+**Phase 6: Community & Reputation** *(Validators Only)*
+
+- Register on validator directories
+- Verify your validator appears correctly on explorers
+- Join community channels (Discord, mailing lists)
+- Stay informed about amendments and upgrades
+- Build reputation (12+ months for UNL consideration)
+
+*Field Guide Sections:* [Community Resources](#community-resources)
 
 ### Critical Dependencies
 
@@ -146,6 +155,11 @@ Some steps must happen in order. Getting this wrong causes problems:
   - [Key Generation](#key-generation)
   - [Token Management](#token-management)
   - [Key Compromise Response](#key-compromise-response)
+- [Community Resources](#community-resources)
+  - [Network Explorers](#network-explorers)
+  - [Validator Directories](#validator-directories)
+  - [Staying Informed](#staying-informed)
+  - [Getting Help](#getting-help)
 - [Putting It All Together](#putting-it-all-together)
 - [Contributing](#contributing)
 
@@ -1198,6 +1212,98 @@ validator-keys revoke_keys --keyfile ~/.ripple/validator-keys.json
 **Source**
 
 See [validator-keys-tool guide](https://github.com/ripple/validator-keys-tool/blob/master/doc/validator-keys-tool-guide.md) for complete documentation.
+
+---
+
+# Community Resources
+
+After deployment, you'll want to verify your node is visible, stay informed about network changes, and know where to get help. These resources are essential for ongoing operations.
+
+### Network Explorers
+
+Use these to verify your node's visibility and check network status:
+
+| Resource | URL | What It Shows |
+|----------|-----|---------------|
+| **XRPL Explorer** | [livenet.xrpl.org](https://livenet.xrpl.org) | Official explorer. Account lookups, transactions, validator list at `/network/validators` |
+| **XRPL Cluster** | [xrplcluster.com](https://xrplcluster.com) | Community WebSocket endpoint with geographic routing. Stats at [xrpl.ws-stats.com](https://xrpl.ws-stats.com) |
+
+### Validator Directories
+
+These sites track validator performance and UNL status:
+
+| Resource | URL | What It Shows |
+|----------|-----|---------------|
+| **XRPSCAN Validators** | [xrpscan.com/validators](https://xrpscan.com/validators) | All validators, domain verification, UNL membership, server versions, amendment votes |
+| **XRPSCAN Amendments** | [xrpscan.com/amendments](https://xrpscan.com/amendments) | Amendment voting status, percentage support, expected activation |
+| **Bithomp Validators** | [bithomp.com/validators](https://bithomp.com/validators) | Validator listings, UNL tracking |
+
+**Post-deployment checklist:**
+1. Verify your validator appears on XRPSCAN
+2. Confirm domain verification shows correctly
+3. Check your amendment votes are recorded
+4. Monitor your agreement percentage over time
+
+### Staying Informed
+
+**Mailing Lists (Essential)**
+
+| List | URL | Content |
+|------|-----|---------|
+| **ripple-server** | [groups.google.com/g/ripple-server](https://groups.google.com/g/ripple-server) | Release announcements, upgrade warnings, amendment alerts. **Subscribe to this.** |
+| **xrpl-announce** | [groups.google.com/g/xrpl-announce](https://groups.google.com/g/xrpl-announce) | Client library updates (~1 email/week) |
+
+**Discord Servers**
+
+| Server | Invite | Focus |
+|--------|--------|-------|
+| **XRP Ledger (Official)** | [discord.com/invite/xrpl](https://discord.com/invite/xrpl) | Community discussions, technical help, announcements |
+| **XRPL Developers** | [discord.com/invite/CVG6Q2S3R8](https://discord.com/invite/CVG6Q2S3R8) | Developer-focused discussions |
+
+**Other Channels**
+
+| Resource | URL | Content |
+|----------|-----|---------|
+| **XRPL Blog** | [xrpl.org/blog](https://xrpl.org/blog) | Release notes, amendment activations, technical updates |
+| **XRPChat** | [xrpchat.com](https://xrpchat.com) | Long-running community forum with technical discussions |
+| **GitHub Releases** | [github.com/XRPLF/rippled/releases](https://github.com/XRPLF/rippled/releases) | Release notes and changelogs |
+
+**Twitter/X Accounts**
+
+- [@RippleXDev](https://twitter.com/RippleXDev) - Protocol changes, infrastructure updates
+- [@XRPLLabs](https://twitter.com/XRPLLabs) - XRPL Labs updates, Hooks amendment news
+
+### Getting Help
+
+**Troubleshooting Resources**
+
+| Resource | URL | Use For |
+|----------|-----|---------|
+| **Troubleshooting Guide** | [xrpl.org/docs/infrastructure/troubleshooting](https://xrpl.org/docs/infrastructure/troubleshooting) | Diagnosing problems, log messages, health checks |
+| **Known Amendments** | [xrpl.org/resources/known-amendments](https://xrpl.org/resources/known-amendments) | Amendment details and voting information |
+| **GitHub Issues** | [github.com/XRPLF/rippled/issues](https://github.com/XRPLF/rippled/issues) | Bug reports, feature requests |
+
+**Quick Diagnostics**
+
+```bash
+# Check server status
+rippled server_info
+
+# Health check
+curl http://localhost:51235/health
+
+# Check if amendment blocked
+rippled server_info | grep amendment_blocked
+```
+
+**Where to Ask Questions**
+
+1. **XRP Ledger Discord** - #technical-discussions for quick questions
+2. **XRPChat Technical Discussion** - For detailed questions with context
+3. **ripple-server mailing list** - For upgrade-related questions
+4. **GitHub Issues** - For bugs (include logs and config)
+
+> **Tip:** When asking for help, include: rippled version (`rippled --version`), `server_info` output, relevant log entries, and your OS/hardware specs.
 
 ---
 

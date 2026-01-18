@@ -192,6 +192,9 @@ This is what you came for. The [Rippled Field Guide](docs/RIPPLED-FIELD-GUIDE.md
 - **Validator Keys** - master key security, token management, compromise response
 - **Fee Voting** - reference fees and reserve settings
 
+**Post-Deployment**
+- **Community Resources** - Network explorers, validator directories, staying informed, getting help
+
 **Reference**
 - **Putting It All Together** - Complete production rippled.cfg example
 
