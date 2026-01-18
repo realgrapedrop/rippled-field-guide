@@ -4,8 +4,135 @@
 
 ---
 
+# Deployment Roadmap
+
+If you're reading this, you've hopefully already reviewed the [README](../README.md) and understand what you're getting into. Running a rippled node or validator is a commitment. This section maps out the logical sequence so you don't miss critical steps or do things out of order.
+
+### The First Decision: Stock Node or Validator?
+
+| Type | Purpose | Commitment |
+|------|---------|------------|
+| **Stock Node** | Track the ledger, serve API requests, learn operations | Moderate - can tolerate some downtime |
+| **Validator** | Participate in consensus, vote on network's future | High - 100% uptime expected, reputation at stake |
+
+> **Recommendation:** Run a stock node first. Gain operational experience before converting to a validator. The official XRPL documentation advises this approach.
+
+### Deployment Phases
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 1: INFRASTRUCTURE                                            │
+│  ─────────────────────────────────────────────────────────────────  │
+│  → Hardware selection (RAM, CPU, storage)                           │
+│  → Hosting decision (bare metal preferred)                          │
+│  → OS setup (Ubuntu 22.04+)                                         │
+│  → Network/firewall configuration                                   │
+│                                                                     │
+│  Field Guide Sections: Hardware Requirements                        │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 2: INSTALLATION & CONFIGURATION                              │
+│  ─────────────────────────────────────────────────────────────────  │
+│  → Install rippled package                                          │
+│  → Configure rippled.cfg                                            │
+│  → Start service and sync                                           │
+│                                                                     │
+│  Field Guide Sections: Node Sizing, Database Management,            │
+│  Network Configuration, Time Synchronization, Operational Settings  │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 3: SECURITY (Required for Validators)                        │
+│  ─────────────────────────────────────────────────────────────────  │
+│  → Port hardening (admin ports, peer_private)                       │
+│  → Firewall rules                                                   │
+│  → Key generation (OFFLINE)                                         │
+│  → Token management                                                 │
+│                                                                     │
+│  Field Guide Sections: Port Configuration & Security, Validator Keys│
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 4: IDENTITY (Validators Only)                                │
+│  ─────────────────────────────────────────────────────────────────  │
+│  → Domain verification (xrp-ledger.toml)                            │
+│  → Fee voting configuration                                         │
+│  → Community presence                                               │
+│                                                                     │
+│  Field Guide Sections: Domain Verification, Fee Voting              │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  PHASE 5: OPERATIONS                                                │
+│  ─────────────────────────────────────────────────────────────────  │
+│  → Monitoring setup                                                 │
+│  → Alerting configuration                                           │
+│  → Maintenance procedures                                           │
+│  → Reputation building (12+ months for UNL consideration)           │
+│                                                                     │
+│  Field Guide Sections: Putting It All Together                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Critical Dependencies
+
+Some steps must happen in order. Getting this wrong causes problems:
+
+| Do This First | Before This | Why |
+|---------------|-------------|-----|
+| Select hardware | Install rippled | Undersized hardware causes sync failures |
+| Install rippled | Generate validator keys | Keys tool comes with rippled package |
+| Generate keys (offline) | Generate token | Token is derived from master key |
+| Add token to config | Restart rippled | Config must be valid before restart |
+| rippled running & synced | Domain verification | Attestation requires running validator |
+| Deploy xrp-ledger.toml | Verify domain | TOML must be accessible for verification |
+| Run stable for months | Apply for UNL | Publishers require proven track record |
+
+### Common Mistakes (Wrong Order)
+
+| Mistake | Consequence |
+|---------|-------------|
+| Generate keys on validator server | Master key exposed if server compromised |
+| Skip stock node phase | Operational inexperience leads to downtime |
+| Configure domain before token | Domain attestation won't match |
+| Apply for UNL too early | Rejected - need 12+ months track record |
+| Use low `online_delete` values | I/O storms degrade performance |
+| Expose admin ports | Remote attacker can stop your server |
+
+### Quick Reference: Stock Node vs Validator
+
+| Aspect | Stock Node | Validator |
+|--------|------------|-----------|
+| Hardware | 16-32 GB RAM, SSD | 32-64 GB RAM, NVMe |
+| `node_size` | medium/large | huge |
+| `peer_private` | Not needed | Required (set to 1) |
+| Admin ports | Localhost | Localhost only |
+| Public WebSocket | Optional | Disabled |
+| Validator keys | Not needed | Required (offline) |
+| Domain verification | Not needed | Required for UNL |
+| Expected `server_state` | `full` | `proposing` |
+
+### Useful Tools
+
+| Tool | Purpose |
+|------|---------|
+| [XRPL Node Configurator](https://xrplf.github.io/xrpl-node-configurator/) | Generate rippled.cfg interactively |
+| [Domain Verifier](https://xrpl.org/resources/dev-tools/domain-verifier) | Verify domain attestation |
+| [TOML Checker](https://xrpl.org/resources/dev-tools/xrp-ledger-toml-checker) | Validate xrp-ledger.toml |
+| [XRPSCAN Validators](https://xrpscan.com/validators) | View validator registry |
+
+**Sources:** [XRPL Installation Guide](https://xrpl.org/docs/infrastructure/installation), [Run rippled as a Validator](https://xrpl.org/docs/infrastructure/configuration/server-modes/run-rippled-as-a-validator), [Capacity Planning](https://xrpl.org/docs/infrastructure/installation/capacity-planning)
+
+---
+
 # Table of Contents
 
+- [Deployment Roadmap](#deployment-roadmap)
 - [Hardware Requirements](#hardware-requirements)
 - [Node Sizing](#node-sizing)
   - [node_size](#node_size)
