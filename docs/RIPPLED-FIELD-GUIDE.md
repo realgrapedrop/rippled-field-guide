@@ -1508,7 +1508,26 @@ time.google.com
 
 **Adapting for Docker**
 
-If running rippled in Docker with monitoring tools on the same host, change the admin port bindings:
+If running rippled in Docker with monitoring tools (like [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard)) on the same host, you need to understand Docker networking to configure admin ports securely.
+
+**Why `ip = 0.0.0.0` is Required**
+
+Docker containers run in isolated network namespaces. Each container has its own `127.0.0.1` that other containers cannot reach:
+
+| Binding | Result |
+|---------|--------|
+| `ip = 127.0.0.1` | Only processes *inside the rippled container* can connect. Monitoring container is blocked. |
+| `ip = 0.0.0.0` | Listens on all container interfaces. Other containers on the same Docker network can connect. |
+
+Since `127.0.0.1` inside the rippled container is not the same as `127.0.0.1` inside the monitoring container, you must use `0.0.0.0` for container-to-container communication.
+
+**The Security Model**
+
+With `ip = 0.0.0.0`, the `admin` parameter becomes your security control. It whitelists which IP addresses can execute privileged commands like `stop`, `validation_seed`, or `peers`.
+
+**Basic Pattern (Subnet Whitelist)**
+
+This allows any container on the Docker bridge networks:
 
 ```ini
 [port_rpc_admin_local]
@@ -1525,7 +1544,89 @@ protocol = ws
 send_queue_limit = 100
 ```
 
-This allows Docker containers to access the admin API while still restricting access to the Docker bridge networks.
+> **Risk:** Any container on those subnets can run admin commands. If another container is compromised, it has admin access to rippled.
+
+**Secure Pattern (Static IP Whitelist)**
+
+For better security, assign static IPs to your containers and whitelist only those specific addresses.
+
+First, create a Docker Compose file with a custom network and static IPs:
+
+```yaml
+# docker-compose.yml
+networks:
+  validator-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+services:
+  rippled:
+    image: your-rippled-image
+    networks:
+      validator-net:
+        ipv4_address: 172.28.0.10
+    # ... other config
+
+  vmagent:
+    image: victoriametrics/vmagent
+    networks:
+      validator-net:
+        ipv4_address: 172.28.0.20
+    # ... other config
+
+  grafana:
+    image: grafana/grafana
+    networks:
+      validator-net:
+        ipv4_address: 172.28.0.30
+    # ... other config
+```
+
+Then configure rippled to allow only those specific IPs:
+
+```ini
+[port_rpc_admin_local]
+port = 5005
+ip = 0.0.0.0
+admin = 127.0.0.1, 172.28.0.10, 172.28.0.20
+protocol = http
+
+[port_ws_admin_local]
+port = 6006
+ip = 0.0.0.0
+admin = 127.0.0.1, 172.28.0.10, 172.28.0.20, 172.28.0.30
+protocol = ws
+send_queue_limit = 100
+```
+
+Now only the rippled container itself (172.28.0.10), vmagent (172.28.0.20), and grafana (172.28.0.30) can run admin commands. Any other container on the network is blocked.
+
+**Why This Is More Secure**
+
+| Pattern | Allowed Admin Access |
+|---------|---------------------|
+| Subnet whitelist (`172.17.0.0/16`) | ~65,000 potential IPs |
+| Static IP whitelist | Only your specific containers (2-3 IPs) |
+
+The static IP pattern follows the principle of least privilege.
+
+**Important Notes**
+
+1. **Static IPs require a user-defined network.** The default Docker bridge network doesn't support static IP assignment.
+
+2. **Keep IPs in sync.** If you change a container's IP in docker-compose.yml, update rippled.cfg to match.
+
+3. **Never publish admin ports.** Even with this configuration, don't use `-p 5005:5005` to expose admin ports to the host. Only publish port 51235 (peer protocol).
+
+4. **Consider separate hosts.** For maximum security, run monitoring on a separate host entirely. See [Hardened Architecture Guide](https://github.com/realgrapedrop/xrpl-validator-dashboard/blob/main/docs/HARDENED_ARCHITECTURE.md).
+
+**Resources**
+
+- [Docker Networking Overview](https://docs.docker.com/network/)
+- [Docker Compose Networking](https://docs.docker.com/compose/networking/)
+- [Assign Static IP to Container](https://docs.docker.com/compose/compose-file/05-services/#ipv4_address-ipv6_address)
 
 ---
 
