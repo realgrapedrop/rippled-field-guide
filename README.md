@@ -193,7 +193,7 @@ This is why UNL publishers prioritize validators with verified domains, public i
 
 ## The Field Guide
 
-The official [Running an XRP Ledger Validator](https://xrpl.org/blog/2020/running-an-xrp-ledger-validator) explains the why. The [Rippled Field Guide](docs/RIPPLED-FIELD-GUIDE.md) covers the how: practical configuration, hard-won lessons, and operational insights compiled into a single reference.
+This is why you came here. While the official [Running an XRP Ledger Validator](https://xrpl.org/blog/2020/running-an-xrp-ledger-validator) explains the why, **[The Rippled Field Guide](docs/RIPPLED-FIELD-GUIDE.md)** covers the how: practical configuration, hard-won lessons, and operational insights compiled into a single reference.
 
 **Getting Started**
 - **Deployment Roadmap** - Logical sequence from infrastructure to operations
