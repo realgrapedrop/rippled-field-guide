@@ -60,10 +60,10 @@ Start with the [README](../README.md) to understand the commitment. Then come ba
 **Phase 5: Operations**
 
 - Monitoring setup
-- Upgrading rippled
 - Maintenance procedures
+- Upgrading rippled
 
-*Field Guide Sections:* [Monitoring](#monitoring), [Upgrading Rippled](#upgrading-rippled), [Maintenance](#maintenance)
+*Field Guide Sections:* [Monitoring](#monitoring), [Maintenance](#maintenance), [Upgrading Rippled](#upgrading-rippled)
 
 **Phase 6: Community & Reputation** *(Validators Only)*
 
@@ -146,8 +146,8 @@ Some steps must happen in order. Getting this wrong causes problems:
   - [Putting It All Together](#putting-it-all-together)
 - [Phase 5: Operations](#phase-5-operations)
   - [Monitoring](#monitoring)
-  - [Upgrading Rippled](#upgrading-rippled)
   - [Maintenance](#maintenance)
+  - [Upgrading Rippled](#upgrading-rippled)
 - [Phase 6: Community & Reputation](#phase-6-community--reputation)
   - [Community Resources](#community-resources)
   - [Directories](#directories)
@@ -1589,7 +1589,7 @@ The static IP pattern follows the principle of least privilege.
 
 # Phase 5: Operations
 
-Your validator is running. Now you need to keep it running well. This phase covers monitoring, upgrades, and ongoing maintenance.
+Your validator is running. Now you need to keep it running well. This phase covers monitoring, ongoing maintenance, and upgrades.
 
 ---
 
@@ -1622,28 +1622,506 @@ rippled server_info | grep amendment_blocked
 
 ---
 
-## Upgrading Rippled
+## Maintenance
 
-*This section is a placeholder. Content coming soon.*
+Regular maintenance prevents small issues from becoming big problems. This section covers log management, disk space, database health, backups, and disaster recovery.
 
-**Key Topics to Cover:**
-- Subscribe to release notifications
-- Upgrade promptly, especially when amendments are approaching activation
-- Test configuration changes on a non-production node first
-- Amendment-blocked servers can't participate in consensus
+### Log Management
+
+**Log File Location**
+
+By default, rippled writes logs to `/var/log/rippled/debug.log`. The verbosity is controlled by `log_level` in your config.
+
+**Log Levels**
+
+| Level | Verbosity | Production Use |
+|-------|-----------|----------------|
+| trace | Extreme | Never |
+| debug | High | Troubleshooting only |
+| info | Medium | Too verbose |
+| **warning** | **Low** | **Recommended** |
+| error | Very low | Minimal logging |
+
+Set the log level in `rippled.cfg`:
+
+```ini
+[rpc_startup]
+{ "command": "log_level", "severity": "warning" }
+```
+
+You can temporarily increase verbosity for debugging without restarting:
+
+```bash
+rippled log_level debug
+# ... investigate issue ...
+rippled log_level warning
+```
+
+**Log Rotation**
+
+The official rippled packages for Ubuntu/Debian and CentOS/RHEL include a logrotate configuration at `/etc/logrotate.d/rippled`. If you need to customize it:
+
+```
+/var/log/rippled/*.log {
+    daily
+    minsize 200M
+    rotate 7
+    nocreate
+    missingok
+    notifempty
+    compress
+    compresscmd /usr/bin/nice
+    compressoptions -n19 ionice -c3 gzip
+    compressext .gz
+    postrotate
+        /opt/ripple/bin/rippled --conf /opt/ripple/etc/rippled.cfg logrotate
+    endscript
+}
+```
+
+The `postrotate` command tells rippled to close and reopen its log file. Adjust `minsize` and `rotate` based on your disk space and retention needs.
+
+> **Note:** Ensure you have only one logrotate configuration for rippled. Multiple configurations can cause issues.
+
+**Source:** [logrotate API reference](https://xrpl.org/docs/references/http-websocket-apis/admin-api-methods/logging-and-data-management-methods/logrotate)
+
+### Disk Space Monitoring
+
+**What Consumes Disk**
+
+| Component | Location | Growth Rate | Notes |
+|-----------|----------|-------------|-------|
+| Ledger database (NuDB) | `/var/lib/rippled/db/nudb` | ~12 GB/day (full history) | Controlled by `online_delete` |
+| SQLite databases | `/var/lib/rippled/db` | Minimal | wallet.db, transaction.db |
+| Logs | `/var/log/rippled` | Depends on log level | Controlled by logrotate |
+
+**Monitoring Commands**
+
+```bash
+# Check rippled data directory size
+du -sh /var/lib/rippled/db/
+
+# Check log directory size
+du -sh /var/log/rippled/
+
+# Check overall disk usage
+df -h /var/lib/rippled
+```
+
+**The online_delete Trade-off**
+
+As covered in [Database Management](#database-management), higher `online_delete` values (16384-32768) use more disk but prevent I/O storms. Monitor your disk usage and adjust accordingly. With `online_delete=32768`, expect 16-24 GB for the ledger database.
+
+### Database Maintenance
+
+**Ledger Cleaner**
+
+rippled includes an asynchronous maintenance process called the Ledger Cleaner that can find and repair corruption in the ledger database.
+
+```bash
+# Check a specific ledger range for corruption
+rippled ledger_cleaner check 75000000 75001000
+
+# Repair corruption in a range
+rippled ledger_cleaner repair 75000000 75001000
+
+# Stop the cleaner
+rippled ledger_cleaner stop
+```
+
+This is an admin command requiring access to admin ports.
+
+**When Database Corruption Occurs**
+
+Corruption can result from:
+- Unexpected shutdowns or power loss
+- Hardware failures (disk, memory)
+- Running out of disk space during writes
+
+**Recovery Options**
+
+**Option 1: Test with fresh database paths**
+
+If you have disk space, change the paths temporarily to test if corruption is the issue:
+
+```ini
+[node_db]
+path=/var/lib/rippled/db/nudb_test
+
+[database_path]
+/var/lib/rippled/db_test
+```
+
+If the server syncs successfully with fresh paths, corruption was the issue.
+
+**Option 2: Delete and re-download**
+
+It's safe to delete rippled's databases - the server will re-download ledger history from the network:
+
+```bash
+# Stop rippled first
+sudo systemctl stop rippled
+
+# Remove databases (keep your config!)
+sudo rm -rf /var/lib/rippled/db/nudb/*
+sudo rm /var/lib/rippled/db/*.db
+
+# Restart - server will sync from network
+sudo systemctl start rippled
+```
+
+Re-syncing typically takes 5-15 minutes for recent ledger data.
+
+> **Warning:** If you delete `wallet.db`, your node will generate a new identity. For stock nodes this is fine. For validators, your validator identity is in `rippled.cfg` (the token), not in `wallet.db`, so your validator identity is preserved.
+
+**Source:** [rippled Server Doesn't Sync](https://xrpl.org/docs/infrastructure/troubleshooting/server-doesnt-sync)
+
+### Validator Key Backups
+
+**What to Back Up**
+
+| File | Location | Contains | Backup Frequency |
+|------|----------|----------|------------------|
+| `validator-keys.json` | Offline storage | Master key, token sequence | After every token generation |
+| `rippled.cfg` | `/etc/opt/ripple/rippled.cfg` | Current token, config | After config changes |
+
+**Backup Best Practices**
+
+1. **Store `validator-keys.json` on encrypted, offline media** (USB drive stored in a safe)
+2. **Multiple copies in different physical locations** - fire, flood, theft protection
+3. **Update backups after every token generation** - the `token_sequence` must always increase
+4. **Never store master keys on the validator server**
+5. **Test your backup restoration process** periodically
+
+**The Critical Sequence Number Rule**
+
+Each token contains a sequence number. The network only accepts tokens with a sequence number higher than any previously seen. If you:
+
+1. Generate token (sequence 1)
+2. Generate token (sequence 2)
+3. Restore old backup (sequence 1)
+4. Generate token (sequence 2 again)
+
+...the network will ignore that token because it's not higher than sequence 2. **Always update your backup after generating tokens.**
+
+**Source:** [validator-keys-tool guide](https://github.com/ripple/validator-keys-tool/blob/master/doc/validator-keys-tool-guide.md)
+
+### Health Checks
+
+**The Health Check Endpoint**
+
+rippled provides a health check endpoint on the peer port:
+
+```bash
+curl http://localhost:51235/health
+```
+
+**Response Interpretation**
+
+| HTTP Status | Meaning |
+|-------------|---------|
+| 200 | Healthy - all metrics normal |
+| 503 | Warning - some metrics in warning range |
+| 500 | Critical - server has serious issues |
+
+A healthy response returns an empty `info` object:
+
+```json
+{
+  "info": {}
+}
+```
+
+An unhealthy response lists the problematic metrics:
+
+```json
+{
+  "info": {
+    "server_state": "syncing",
+    "validated_ledger": "too old"
+  }
+}
+```
+
+**Metrics Checked**
+
+- `server_state` - should be `full` or `proposing`
+- `validated_ledger` - age of latest validated ledger
+- `peers` - number of peer connections
+- `amendment_blocked` - whether server is amendment blocked
+
+**Monitoring Best Practices**
+
+- Call the health check frequently (every 30-60 seconds)
+- Don't alert on every unhealthy status - metrics can fluctuate briefly
+- Escalate only for **severe and consistent** problems
+- Allow 15 minutes after startup before expecting healthy status
+
+**Special Cases**
+
+- **Private peers**: Health check warns if peers < 7, but private validators intentionally have few peers. Check for your expected peer count instead.
+- **Test networks**: Health check warns if validated ledger is > 7 seconds old, but test networks may have longer gaps between ledgers.
+
+**Source:** [Health Check Interventions](https://xrpl.org/docs/infrastructure/troubleshooting/health-check-interventions)
+
+### Disaster Recovery
+
+**Scenario: Server Hardware Failure**
+
+1. Provision new server meeting [Hardware Requirements](#hardware-requirements)
+2. Install rippled from packages
+3. Copy your `rippled.cfg` from backup (includes validator token)
+4. Start rippled - it will sync from the network
+5. Verify `server_state` returns to `proposing` (validator) or `full` (stock node)
+
+**Scenario: Configuration Corruption**
+
+1. Stop rippled
+2. Restore `rippled.cfg` from backup
+3. Verify file permissions: `chmod 600 /etc/opt/ripple/rippled.cfg`
+4. Restart rippled
+
+**Scenario: Master Key Compromise**
+
+This is the worst case - see [Key Compromise Response](#key-compromise-response) in the Validator Keys section. You must revoke the key and coordinate with UNL publishers.
+
+**Disaster Recovery Checklist**
+
+- [ ] Encrypted backup of `validator-keys.json` in secure offline location
+- [ ] Backup of `rippled.cfg` with current token
+- [ ] Documented server provisioning process
+- [ ] Tested restoration procedure (at least annually)
+- [ ] Contact information for UNL publishers (in case of master key compromise)
 
 ---
 
-## Maintenance
+## Upgrading Rippled
 
-*This section is a placeholder. Content coming soon.*
+Keeping rippled updated is essential. Outdated servers can become amendment blocked and unable to participate in consensus. This section covers notification channels, upgrade procedures, and troubleshooting.
 
-**Key Topics to Cover:**
-- Log rotation and disk space management
-- Database maintenance
-- Certificate renewal (if applicable)
-- Backup procedures for validator keys
-- Disaster recovery planning
+### Staying Notified
+
+**Subscription Options (Use Multiple)**
+
+| Channel | URL | What You Get |
+|---------|-----|--------------|
+| **ripple-server mailing list** | [groups.google.com/g/ripple-server](https://groups.google.com/g/ripple-server) | Release announcements, urgent upgrade notices, amendment alerts. **Essential.** |
+| **GitHub Releases** | [github.com/XRPLF/rippled/releases](https://github.com/XRPLF/rippled/releases) | Detailed release notes, changelogs |
+| **GitHub Watch** | Click "Watch" → "Custom" → "Releases" | Email notifications for new releases |
+| **RSS Feed** | `github.com/XRPLF/rippled/releases.atom` | For RSS readers |
+
+**Built-in Upgrade Notification**
+
+rippled itself monitors the network and warns you when most validators are running a newer version:
+
+```
+Majority of your trusted validators run a higher version of rippled
+server software. Please upgrade your rippled server software.
+```
+
+This message appears when >60% of validators on your UNL run a newer version. By the time you see this, upgrading is urgent.
+
+**Amendment Voting Timeline**
+
+When new amendments are introduced:
+
+1. **Release**: New rippled version with amendment code is published
+2. **Voting begins**: Validators vote for/against (requires 80% support for 2 weeks)
+3. **Activation**: Amendment becomes active on the network
+4. **Blocking**: Servers without the amendment code become amendment blocked
+
+The window between voting start and activation is typically 2 weeks. Upgrade before activation to avoid being blocked.
+
+**Source:** [XRPL Blog](https://xrpl.org/blog)
+
+### Pre-Upgrade Checklist
+
+Before upgrading:
+
+1. **Check current version**
+   ```bash
+   rippled --version
+   # or
+   rippled server_info | grep build_version
+   ```
+
+2. **Read the release notes** - [GitHub Releases](https://github.com/XRPLF/rippled/releases)
+   - Are there breaking changes?
+   - Does this release require a config change?
+   - Are there new amendments that will begin voting?
+
+3. **Check for GPG key updates** - Some releases require re-trusting the package signing key
+
+4. **Verify disk space** - Ensure sufficient space for the upgrade
+
+5. **Plan timing** - Upgrade during low-activity periods if possible, though rippled restarts are fast
+
+### Upgrade Procedures
+
+**Method 1: Automatic Updates (Convenience)**
+
+Enable automatic updates using the provided cron script:
+
+```bash
+# Check if the cron config exists
+ls /opt/ripple/etc/update-rippled-cron
+
+# Enable automatic updates
+sudo ln -s /opt/ripple/etc/update-rippled-cron /etc/cron.d/
+```
+
+> **Warning:** Automatic updates carry risk. If the repository were compromised, malicious code could be deployed automatically. Not recommended for high-stakes validators.
+
+**Method 2: Manual Update Script (Recommended)**
+
+Use the provided update script:
+
+```bash
+sudo /opt/ripple/bin/update-rippled.sh
+```
+
+This script handles the full update process including daemon reload and restart.
+
+**Method 3: Manual apt Commands (Most Control)**
+
+```bash
+# Update package lists
+sudo apt update
+
+# Check available version
+apt-cache policy rippled
+
+# Upgrade rippled
+sudo apt upgrade rippled
+
+# Reload systemd (picks up any unit file changes)
+sudo systemctl daemon-reload
+
+# Restart rippled
+sudo systemctl restart rippled
+```
+
+**Method 4: Graceful Shutdown Before Upgrade**
+
+For the smoothest upgrade with fastest re-sync:
+
+```bash
+# Install the new package (doesn't restart yet)
+sudo apt update && sudo apt upgrade rippled
+
+# Gracefully stop rippled
+/opt/ripple/bin/rippled stop
+
+# Wait for full stop (can take a minute)
+while systemctl is-active rippled >/dev/null 2>&1; do
+    sleep 2
+done
+
+# Reload and start
+sudo systemctl daemon-reload
+sudo systemctl start rippled
+```
+
+> **Note:** There's a known issue where `rippled stop` sometimes causes a restart instead of stopping. If this happens, use `sudo systemctl stop rippled` instead.
+
+**GPG Key Updates**
+
+Occasionally, the package signing key is renewed. If `apt update` fails with GPG errors:
+
+```bash
+# Download and trust the new key
+wget -q -O - "https://repos.ripple.com/repos/api/gpg/key/public" | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/ripple.gpg
+
+# Retry update
+sudo apt update
+```
+
+**Source:** [Update Manually on Ubuntu](https://xrpl.org/update-rippled-manually-on-ubuntu.html)
+
+### Post-Upgrade Verification
+
+After upgrading, verify the server is healthy:
+
+```bash
+# Check version
+rippled server_info | grep build_version
+
+# Check server state (should return to proposing/full within minutes)
+rippled server_info | grep server_state
+
+# Check for amendment blocked status
+rippled server_info | grep amendment_blocked
+
+# Check health endpoint
+curl http://localhost:51235/health
+
+# Monitor logs for errors
+tail -f /var/log/rippled/debug.log
+```
+
+**Expected Behavior**
+
+- Server will sync with the network (5-15 minutes typical)
+- `server_state` returns to `full` (stock node) or `proposing` (validator)
+- `amendment_blocked` should be `false`
+- Health check returns 200 with empty `info` object
+
+### Amendment Blocking
+
+**What It Means**
+
+When the network enables a protocol amendment your server doesn't understand, your server becomes "amendment blocked." This is a safety feature - rather than misinterpret transactions under rules it doesn't know, the server stops processing.
+
+**Symptoms**
+
+- `server_state` shows `connected` instead of `full` or `proposing`
+- `amendment_blocked: true` in `server_info`
+- Error when submitting transactions: `amendmentBlocked` (error code 14)
+- Health check returns critical status
+
+**How to Check**
+
+```bash
+# Check if amendment blocked
+rippled server_info | grep amendment_blocked
+
+# See which features are blocking
+rippled feature | grep -A1 '"blocked"'
+```
+
+**How to Resolve**
+
+Upgrade to the latest rippled version:
+
+```bash
+sudo apt update && sudo apt upgrade rippled
+sudo systemctl restart rippled
+```
+
+In most cases, upgrading to the latest version resolves the block. Check [Known Amendments](https://xrpl.org/resources/known-amendments) to see which version introduced support for specific amendments.
+
+**Prevention**
+
+- Subscribe to ripple-server mailing list for advance notice
+- Upgrade promptly when new versions are released
+- Don't wait for the built-in >60% warning - by then you're behind
+
+**Source:** [rippled Server is Amendment Blocked](https://xrpl.org/docs/infrastructure/troubleshooting/server-is-amendment-blocked)
+
+### Version History Context
+
+As of January 2026:
+
+- **Current version**: 3.0.0
+- **Minimum for recent amendments**: 2.4.0+
+- **Amendment blocked if older than**: Depends on which amendments have activated
+
+Recent significant releases:
+- **3.0.0** (December 2025): Five new amendments including fixPriceOracleOrder, fixTokenEscrowV1, fixAMMClawbackRounding
+- **2.4.0**: Minimum version for many 2024-2025 amendments
+
+Check [GitHub Releases](https://github.com/XRPLF/rippled/releases) for the complete changelog.
 
 ---
 
