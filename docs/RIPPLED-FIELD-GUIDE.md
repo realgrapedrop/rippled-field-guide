@@ -30,50 +30,48 @@ Start with the [README](../README.md) to understand the commitment. Then come ba
 - OS setup (Ubuntu 22.04+)
 - Network/firewall configuration
 
-*Field Guide Sections:* [Hardware Requirements](#hardware-requirements)
+*Field Guide Sections:* [Hardware Requirements](#hardware-requirements), [Hosting Decisions](#hosting-decisions)
 
-**Phase 2: Installation & Configuration**
+**Phase 2: Security**
 
-- Install rippled package
-- Configure rippled.cfg
-- Start service and sync
-
-*Field Guide Sections:* [Node Sizing](#node-sizing), [Database Management](#database-management), [Network Configuration](#network-configuration), [Time Synchronization](#time-synchronization), [Operational Settings](#operational-settings)
-
-**Phase 3: Security** *(Required for Validators)*
-
-- Port hardening (admin ports, peer_private)
-- Firewall rules
+- Port concepts and configuration
+- Key hierarchy understanding
 - Key generation (OFFLINE)
 - Token management
 
 *Field Guide Sections:* [Port Configuration & Security](#port-configuration--security), [Validator Keys](#validator-keys)
 
-**Phase 4: Identity** *(Validators Only)*
+**Phase 3: Identity** *(Validators Only)*
 
-- Domain verification (xrp-ledger.toml)
-- Fee voting configuration
-- Community presence
+- Domain verification concepts and preparation
+- Fee voting philosophy
+- xrp-ledger.toml setup
 
 *Field Guide Sections:* [Domain Verification](#domain-verification), [Fee Voting](#fee-voting)
+
+**Phase 4: Installation & Configuration**
+
+- Install rippled package
+- Configure rippled.cfg
+- Start service and sync
+
+*Field Guide Sections:* [Node Sizing](#node-sizing), [Database Management](#database-management), [Network Configuration](#network-configuration), [Time Synchronization](#time-synchronization), [Operational Settings](#operational-settings), [Putting It All Together](#putting-it-all-together)
 
 **Phase 5: Operations**
 
 - Monitoring setup
-- Alerting configuration
+- Upgrading rippled
 - Maintenance procedures
 
-*Field Guide Sections:* [Putting It All Together](#putting-it-all-together)
+*Field Guide Sections:* [Monitoring](#monitoring), [Upgrading Rippled](#upgrading-rippled), [Maintenance](#maintenance)
 
 **Phase 6: Community & Reputation** *(Validators Only)*
 
 - Register on validator directories
-- Verify your validator appears correctly on explorers
-- Join community channels (Discord, mailing lists)
-- Stay informed about amendments and upgrades
+- Join community channels
 - Build reputation (12+ months for UNL consideration)
 
-*Field Guide Sections:* [Community Resources](#community-resources)
+*Field Guide Sections:* [Community Resources](#community-resources), [Directories](#directories), [Building Reputation](#building-reputation)
 
 ### Critical Dependencies
 
@@ -82,8 +80,9 @@ Some steps must happen in order. Getting this wrong causes problems:
 | Do This First | Before This | Why |
 |---------------|-------------|-----|
 | Select hardware | Install rippled | Undersized hardware causes sync failures |
-| Install rippled | Generate validator keys | Keys tool comes with rippled package |
+| Understand port security | Configure rippled.cfg | Misconfigured ports expose admin access |
 | Generate keys (offline) | Generate token | Token is derived from master key |
+| Install rippled | Generate validator keys | Keys tool comes with rippled package |
 | Add token to config | Restart rippled | Config must be valid before restart |
 | rippled running & synced | Domain verification | Attestation requires running validator |
 | Deploy xrp-ledger.toml | Verify domain | TOML must be accessible for verification |
@@ -129,47 +128,41 @@ Some steps must happen in order. Getting this wrong causes problems:
 # Table of Contents
 
 - [Deployment Roadmap](#deployment-roadmap)
-- [Hardware Requirements](#hardware-requirements)
-- [Node Sizing](#node-sizing)
-  - [node_size](#node_size)
-- [Database Management](#database-management)
-  - [online_delete Tuning](#online_delete-tuning)
-  - [advisory_delete](#advisory_delete)
-- [Network Configuration](#network-configuration)
-  - [compression](#compression)
-  - [peers_max](#peers_max)
-- [Port Configuration & Security](#port-configuration--security)
-  - [Port Types](#port-types)
-  - [Understanding ip vs admin](#understanding-ip-vs-admin)
-  - [send_queue_limit](#send_queue_limit)
-  - [Security Patterns](#security-patterns)
-  - [Firewall Rules](#firewall-rules)
-- [Time Synchronization](#time-synchronization)
-  - [sntp_servers](#sntp_servers)
-- [Fee Voting](#fee-voting)
-- [Operational Settings](#operational-settings)
-  - [log_level](#log_level)
-  - [ssl_verify](#ssl_verify)
-- [Domain Verification](#domain-verification)
-  - [xrp-ledger.toml](#xrp-ledgertoml)
-  - [Common Mistakes](#common-mistakes)
-  - [Step-by-Step Setup](#step-by-step-setup)
-- [Validator Keys](#validator-keys)
-  - [Key Hierarchy](#key-hierarchy)
-  - [Key Generation](#key-generation)
-  - [Token Management](#token-management)
-  - [Key Compromise Response](#key-compromise-response)
-- [Community Resources](#community-resources)
-  - [Network Explorers](#network-explorers)
-  - [Validator Directories](#validator-directories)
-  - [Staying Informed](#staying-informed)
-  - [Getting Help](#getting-help)
-- [Putting It All Together](#putting-it-all-together)
+- [Phase 1: Infrastructure](#phase-1-infrastructure)
+  - [Hardware Requirements](#hardware-requirements)
+  - [Hosting Decisions](#hosting-decisions)
+- [Phase 2: Security](#phase-2-security)
+  - [Port Configuration & Security](#port-configuration--security)
+  - [Validator Keys](#validator-keys)
+- [Phase 3: Identity](#phase-3-identity)
+  - [Domain Verification](#domain-verification)
+  - [Fee Voting](#fee-voting)
+- [Phase 4: Installation & Configuration](#phase-4-installation--configuration)
+  - [Node Sizing](#node-sizing)
+  - [Database Management](#database-management)
+  - [Network Configuration](#network-configuration)
+  - [Time Synchronization](#time-synchronization)
+  - [Operational Settings](#operational-settings)
+  - [Putting It All Together](#putting-it-all-together)
+- [Phase 5: Operations](#phase-5-operations)
+  - [Monitoring](#monitoring)
+  - [Upgrading Rippled](#upgrading-rippled)
+  - [Maintenance](#maintenance)
+- [Phase 6: Community & Reputation](#phase-6-community--reputation)
+  - [Community Resources](#community-resources)
+  - [Directories](#directories)
+  - [Building Reputation](#building-reputation)
 - [Contributing](#contributing)
 
 ---
 
-# Hardware Requirements
+# Phase 1: Infrastructure
+
+Before installing rippled, you need the right foundation. This phase covers hardware selection, hosting decisions, and basic network setup.
+
+---
+
+## Hardware Requirements
 
 **The Bottom Line**
 
@@ -199,6 +192,16 @@ Storage speed is critical. Requirements:
 - **IOPS**: 10,000+ sustained (not burst)
 - **Capacity**: 50 GB minimum for database partition
 
+**Source**
+
+See [XRPL System Requirements](https://xrpl.org/docs/infrastructure/installation/system-requirements) for official specifications.
+
+---
+
+## Hosting Decisions
+
+**The Bottom Line**
+
 **Prefer bare metal over cloud.** Hyperscalers (AWS, Azure, OCI) introduce multiple issues for validators:
 
 - **Noisy neighbors**: Shared physical hardware means other tenants can spike resource usage, throttling your validator during critical consensus moments
@@ -206,268 +209,23 @@ Storage speed is critical. Requirements:
 - **Storage I/O throttling**: EBS and equivalent block storage have IOPS burst credits. EC2 instances also have aggregate EBS bandwidth limits (e.g., r6i.xlarge drops from 40K to 6K IOPS after 30 minutes of sustained load)
 - **Microburst penalties**: Short spikes in demand trigger throttling even when average utilization appears low - CloudWatch metrics aren't granular enough to detect millisecond-level bursts
 
-If cloud is unavoidable, use instances with local NVMe storage (AWS i3/i4 series, Azure Lsv2, OCI Dense I/O) and dedicated network bandwidth ("n" suffix instances on AWS like C5n, M5n).
+**If Cloud is Unavoidable**
 
-**Source**
+Use instances with local NVMe storage (AWS i3/i4 series, Azure Lsv2, OCI Dense I/O) and dedicated network bandwidth ("n" suffix instances on AWS like C5n, M5n).
 
-See [XRPL System Requirements](https://xrpl.org/docs/infrastructure/installation/system-requirements) for official specifications.
+**OS Recommendation**
 
----
-
-# Node Sizing
-
-### node_size
-
-**The Bottom Line**
-
-**Match `node_size` to your available RAM.** This is the single most important sizing decision.
-
-| Value | RAM Needed | Use Case |
-|-------|------------|----------|
-| tiny | 1-2 GB | Testing only |
-| small | 4-8 GB | Light stock node |
-| medium | 8-16 GB | Standard stock node |
-| large | 16-32 GB | Busy stock node |
-| huge | 32-64 GB | Validators, high-traffic nodes |
-
-**What It Controls**
-
-The `node_size` parameter is a macro that tunes multiple internal settings:
-
-- Memory allocation for caches
-- Number of worker threads
-- Database buffer sizes
-- Fetch pack sizes for historical data
-
-**Why It Matters**
-
-- **Undersized**: Node falls behind, misses ledgers, poor sync performance
-- **Oversized**: Wastes memory, no performance benefit
-- **Just right**: Smooth operation with efficient resource use
-
-**Configuration**
-
-```ini
-[node_size]
-huge
-```
-
-No other parameters needed - rippled auto-tunes everything else based on this value.
-
-**Common Mistake**
-
-Don't try to manually tune thread counts or cache sizes. rippled's auto-tuning based on `node_size` is well-tested. Manual overrides often make things worse.
+Ubuntu 22.04+ LTS is the most commonly used and well-tested platform for rippled.
 
 ---
 
-# Database Management
+# Phase 2: Security
 
-### online_delete Tuning
-
-**The Bottom Line**
-
-**Set `online_delete` to at least 16384, preferably 32768.** The default value (512) causes I/O storms that hurt validator performance.
-
-| Scenario | online_delete | Rationale |
-|----------|---------------|-----------|
-| Default (not recommended) | 512-2000 | Causes I/O storms |
-| Minimum stable | 8192 | ~8 hours between deletes |
-| **Recommended** | **16384-32768** | **14-36 hours between deletes** |
-| Conservative | 50000+ | Days between deletes, if disk permits |
-
-**The Problem: I/O Storms**
-
-Even on high-spec hardware (150k IOPS NVMe, 80 cores, 128 GB RAM), validators experience dropped ledgers due to I/O storms triggered by low `online_delete` values. The pattern is distinctive:
-
-**Sawtooth Pattern (Low online_delete = 512):**
-```
-IOPS
-30k ┤        ╭─╮        ╭─╮        ╭─╮        ╭─╮
-    │       ╱   ╲       ╱  ╲       ╱  ╲       ╱  ╲    ← Delete storms
-15k ┤      ╱     ╲     ╱    ╲     ╱    ╲     ╱    ╲
-    │     ╱       ╲   ╱      ╲   ╱      ╲   ╱      ╲
- 0k ┼────╱─────────╲─╱────────╲─╱────────╲─╱────────╲──
-    └────┴──────────┴──────────┴──────────┴──────────┴────► Time
-         ~30min    ~30min    ~30min    ~30min
-```
-
-**Smooth Pattern (High online_delete = 16384+):**
-```
-IOPS
-30k ┤
-    │
-15k ┤
-    │  ────────────────────────────────────────────  ← Steady state
- 0k ┼
-    └──────────────────────────────────────────────────► Time
-```
-
-**Why NuDB Makes This Worse**
-
-NuDB (rippled's ledger database) is optimized for append-mostly workloads:
-
-- **Writes are fast:** Sequential appends are efficient
-- **Deletes are expensive:** Requires compaction and reorganization
-- **Frequent small deletes = worst case for NuDB**
-
-By increasing `online_delete`, you allow NuDB to operate in its optimal mode (appending) for longer periods before incurring deletion overhead.
-
-**The Rotation Mechanism**
-
-rippled maintains two NuDB databases simultaneously:
-- **"Writable" DB** - receives new/modified nodes
-- **"Archive" DB** - the older database being phased out
-
-During rotation, rippled copies all nodes that **weren't modified** since the last rotation from archive to writable. This copy operation is the expensive step.
-
-**The math:**
-- Lower `online_delete` → fewer ledgers between rotations → fewer transactions → fewer modified nodes
-- Fewer modified nodes → **more nodes must be copied** during rotation
-- More copying → I/O spikes → potential missed consensus rounds
-
-**Extreme example:** If you rotated every ledger and only 6 accounts changed, you'd copy millions of unchanged nodes. With 32,768 ledgers between rotations, far more nodes have been naturally modified, so fewer need copying.
-
-**Impact on Validator Performance**
-
-| Metric | During Delete Storm | Normal Operation |
-|--------|---------------------|------------------|
-| I/O latency | Spikes to 10-100+ ms | 1-2 ms |
-| Consensus participation | May miss rounds | Full participation |
-| Agreement % | Drops periodically | Stable |
-| server_state | May flicker | Steady proposing |
-
-A validator can have perfect agreement scores most of the time but experience periodic drops during I/O storms.
-
-**The Trade-off**
-
-| online_delete | Disk Space | I/O Pattern | Delete Frequency |
-|---------------|------------|-------------|------------------|
-| 512 | ~250 MB | Sawtooth (bad) | Every 30 min |
-| 2000 | ~1 GB | Spiky | Every 2 hours |
-| 16384 | ~8-12 GB | Smooth | Every 14-18 hours |
-| 32768 | ~16-24 GB | Very smooth | Every 36 hours |
-
-**The trade-off is minimal:** Even at 16384, you're only using ~8-12 GB more disk space in exchange for dramatically smoother I/O and more stable validation.
-
-**Configuration**
-
-```ini
-[node_db]
-type=NuDB
-path=/var/lib/rippled/db/nudb
-online_delete=32768
-advisory_delete=0
-
-[ledger_history]
-32768
-```
-
-> **Note:** `ledger_history` must be ≤ `online_delete`.
-
-**Verifying the Change**
-
-After changing `online_delete` and restarting rippled:
-
-1. The first delete cycle will still occur at the previous threshold
-2. The smooth I/O pattern becomes visible after ledger count exceeds the new threshold
-3. Monitor your disk I/O - the sawtooth pattern should disappear
-
-**Additional Tuning Parameters**
-
-If you still experience issues, these parameters in `[node_db]` may help:
-- `age_threshold_seconds` - minimum age before deletion eligible
-- `recovery_wait_seconds` - delay before rotation resumes after interruption
-
-**The One Rule**
-
-**Never use low values to "save disk space."** You'll pay for it in I/O storms and degraded validator performance. Disk is cheap; validator reputation isn't.
-
-**Source**
-
-This issue was identified by [@shortthefomo](https://github.com/shortthefomo) and documented in [rippled issue #6202](https://github.com/XRPLF/rippled/issues/6202), with technical explanation from Ripple engineer [@ximinez](https://github.com/ximinez).
-
-### advisory_delete
-
-**The Bottom Line**
-
-**Use `advisory_delete=0` (the default).** Let rippled manage deletion automatically.
-
-**What It Does**
-
-| Value | Behavior |
-|-------|----------|
-| 0 | rippled decides when to delete old ledgers (automatic) |
-| 1 | rippled waits for an external signal before deleting |
-
-**When to Use Each**
-
-- **`0` (recommended)**: Standard deployments. rippled handles everything.
-- **`1`**: Only if you have external tooling that needs to process ledger data before deletion, or you're running a specialized archival integration.
-
-**Configuration**
-
-```ini
-[node_db]
-type=NuDB
-path=/var/lib/rippled/db/nudb
-advisory_delete=0
-online_delete=32768
-```
+Before you configure rippled, understand the security model. This phase covers port security and validator key management - concepts you need before writing your config file.
 
 ---
 
-# Network Configuration
-
-### compression
-
-**The Bottom Line**
-
-**Always enable compression.** There's no good reason to disable it.
-
-```ini
-[compression]
-true
-```
-
-**What It Does**
-
-Compresses peer protocol messages using LZ4. Reduces bandwidth usage by 60-80% with negligible CPU overhead.
-
-**When to Disable**
-
-Almost never. The only scenario: you're on a local network with unlimited bandwidth and you're chasing microseconds of latency. Even then, the savings are marginal.
-
-### peers_max
-
-**The Bottom Line**
-
-**21-30 for validators, 15-21 for stock nodes.**
-
-| Node Type | Recommended | Notes |
-|-----------|-------------|-------|
-| Validator | 21-30 | Enough for reliable propagation |
-| Stock node | 15-21 | Balance between connectivity and resources |
-| Private/minimal | 10-15 | Minimum viable connectivity |
-
-**The Trade-off**
-
-- **More peers**: Faster transaction/ledger propagation, more redundancy if peers drop
-- **Fewer peers**: Less bandwidth, CPU, and memory usage
-
-**Why Validators Don't Need Huge Counts**
-
-Validators receive transactions from the network and propagate validations. They don't need 100 peers - they need *enough* peers to stay reliably connected. 21 well-connected peers is plenty.
-
-**Configuration**
-
-```ini
-[peers_max]
-21
-```
-
----
-
-# Port Configuration & Security
+## Port Configuration & Security
 
 Understanding port configuration is critical for validator security. The sentry architecture diagram below shows how a properly configured validator exposes only the peer port (51235) through its stock nodes, keeping admin ports locked to localhost.
 
@@ -679,366 +437,7 @@ For hardened multi-host architectures, see [Hardened Architecture Guide](https:/
 
 ---
 
-# Time Synchronization
-
-### sntp_servers
-
-**The Bottom Line**
-
-**Configure multiple diverse time sources.** Consensus depends on accurate time.
-
-```ini
-[sntp_servers]
-time.nist.gov
-pool.ntp.org
-time.cloudflare.com
-time.google.com
-```
-
-**Why Multiple Servers**
-
-- **Redundancy**: If one server is unreachable, others provide time
-- **Cross-checking**: rippled can detect if one source is wrong
-- **Low latency**: Different providers have different geographic coverage
-
-**Good Server Choices**
-
-| Server | Type | Notes |
-|--------|------|-------|
-| time.nist.gov | Government | US-based, authoritative |
-| pool.ntp.org | Community pool | Anycast, global |
-| time.cloudflare.com | CDN | Low latency globally |
-| time.google.com | CDN | Smeared leap seconds |
-
-**Why Time Matters**
-
-The XRP Ledger consensus protocol uses timestamps. Clock drift can cause:
-- Validation timing issues
-- Transactions appearing to be in the future/past
-- Sync problems with other validators
-
-Your system should also run ntpd or chronyd for OS-level time sync.
-
----
-
-# Fee Voting
-
-**The Bottom Line**
-
-**Use the network defaults unless you have strong governance reasons to deviate.**
-
-```ini
-[voting]
-reference_fee = 10
-account_reserve = 1000000
-owner_reserve = 200000
-```
-
-**What These Values Mean**
-
-| Setting | Value | Human Readable | Purpose |
-|---------|-------|----------------|---------|
-| reference_fee | 10 | 0.00001 XRP | Base transaction cost |
-| account_reserve | 1000000 | 1 XRP | Minimum balance to activate account |
-| owner_reserve | 200000 | 0.2 XRP | Cost per owned object (trustline, offer, etc.) |
-
-**How Fee Voting Works**
-
-Validators vote on these values. The network uses the **median** of all validator votes. This means:
-
-- Your vote alone won't change anything
-- Changing network fees requires coordinated validator consensus
-- Outlier votes are ignored
-
-**Philosophy Behind Current Values**
-
-- **reference_fee (10 drops)**: Low enough for normal use, high enough to make spam expensive at scale
-- **account_reserve (1 XRP)**: Prevents ledger bloat from millions of empty accounts
-- **owner_reserve (0.2 XRP)**: Makes users think twice before creating objects that live forever in the ledger
-
-**When to Vote Differently**
-
-Rarely. Fee changes are network governance decisions. Only deviate if:
-- You're participating in a coordinated network-wide fee adjustment
-- You have data showing current fees are causing problems
-- You've discussed with other validators
-
----
-
-# Operational Settings
-
-### log_level
-
-**The Bottom Line**
-
-**Run `warning` in production.** Only increase for troubleshooting.
-
-| Level | Verbosity | Disk Impact | Use Case |
-|-------|-----------|-------------|----------|
-| trace | Extreme | GB/hour | Deep debugging only |
-| debug | High | Large | Development, troubleshooting |
-| info | Medium | Moderate | Default (too verbose for production) |
-| **warning** | **Low** | **Minimal** | **Production recommended** |
-| error | Very low | Very low | Only problems |
-| fatal | Minimal | Negligible | Almost nothing |
-
-**Configuration**
-
-Set via `[rpc_startup]` to apply at boot:
-
-```ini
-[rpc_startup]
-{ "command": "log_level", "severity": "warning" }
-```
-
-**Runtime Adjustment**
-
-Temporarily increase for debugging without restart:
-
-```bash
-rippled log_level debug
-```
-
-Then set back:
-
-```bash
-rippled log_level warning
-```
-
-**Why Not `info`?**
-
-The default `info` level logs every ledger close, peer connection, and many routine operations. On a busy validator, this generates significant disk I/O. `warning` logs only things that might need attention.
-
-### ssl_verify
-
-**The Bottom Line**
-
-**Always `1` in production.** Never disable SSL verification.
-
-```ini
-[ssl_verify]
-1
-```
-
-**What It Does**
-
-| Value | Behavior |
-|-------|----------|
-| 1 | Verify SSL certificates for outbound connections |
-| 0 | Skip verification (INSECURE) |
-
-**Why It Matters**
-
-rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl.xrplf.org). SSL verification ensures:
-
-- You're actually talking to the real publisher
-- No man-in-the-middle can inject a malicious validator list
-- Your node won't trust fake validators
-
-**When `0` is Acceptable**
-
-- Local development with self-signed certificates
-- Isolated test networks
-- Never in production
-
----
-
-# Domain Verification
-
-Domain verification establishes a cryptographic link between your validator and a domain you control. This is **required** for UNL consideration and helps the community identify legitimate validators.
-
-<p align="center">
-  <img src="../images/validator-domain-verification.png" alt="Validator Domain Verification Flow" width="650">
-</p>
-
-### xrp-ledger.toml
-
-**The Bottom Line**
-
-Host a `xrp-ledger.toml` file at `https://YOUR_DOMAIN/.well-known/xrp-ledger.toml` with your validator's public key and attestation.
-
-**What It Does**
-
-The `xrp-ledger.toml` file creates a two-way trust link:
-1. Your validator announces "I belong to this domain" (via rippled config)
-2. Your domain announces "This validator belongs to me" (via the TOML file)
-
-Verification tools check both directions to confirm the link is legitimate.
-
-**File Structure**
-
-```toml
-# xrp-ledger.toml
-
-[METADATA]
-modified = 2024-01-15T00:00:00.000Z
-
-[[VALIDATORS]]
-public_key = "nHUjYWSeiAepbkkrmwmQXFnohhr6Vy5oFK9Gk6TUF6MAT4qSiXSK"
-attestation = "9A379A630BA161A3E7A0969E472FAA82C1542FF24C412250C86AAEF55209DD35..."
-network = "main"
-owner_country = "US"
-server_country = "DE"
-unl = "https://vl.ripple.com"
-
-[[PRINCIPALS]]
-name = "Your Name or Organization"
-email = "validator@example.com"
-```
-
-**Field Reference**
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `public_key` | Yes | Master public key (starts with `n`) |
-| `attestation` | Yes | Hex signature linking validator to domain |
-| `network` | Yes | `main`, `testnet`, or custom chain ID |
-| `owner_country` | No | Two-letter ISO country code (owner jurisdiction) |
-| `server_country` | No | Two-letter ISO country code (server location) |
-| `unl` | No | URL of validator list you follow |
-
-> **Note:** Use `[[VALIDATORS]]` with double brackets. This is TOML array-of-tables syntax. Single brackets `[VALIDATORS]` will fail.
-
-### Common Mistakes
-
-**1. Domain Mismatch (Most Common)**
-
-The domain in your attestation must **exactly match** where the TOML is served:
-
-| TOML Location | Domain Must Be |
-|---------------|----------------|
-| `https://example.com/.well-known/xrp-ledger.toml` | `example.com` |
-| `https://www.example.com/.well-known/xrp-ledger.toml` | `www.example.com` |
-| `https://validator.example.com/.well-known/xrp-ledger.toml` | `validator.example.com` |
-
-If you run the `set_domain` command with `example.com` but serve the TOML from `www.example.com`, verification will fail.
-
-**2. Missing CORS Headers**
-
-Verification tools run in browsers and need CORS enabled. Without it, requests are blocked.
-
-**Nginx:**
-```nginx
-location /.well-known/xrp-ledger.toml {
-    default_type application/toml;
-    add_header 'Access-Control-Allow-Origin' '*';
-}
-```
-
-**Apache:**
-```apache
-<Location "/.well-known/xrp-ledger.toml">
-    Header set Access-Control-Allow-Origin "*"
-</Location>
-```
-
-**3. SSL/TLS Issues**
-
-- Must use HTTPS (not HTTP)
-- Must use a valid certificate from a recognized CA
-- Self-signed certificates will fail
-- Expired certificates will fail
-
-**4. Wrong Path**
-
-The path `/.well-known/xrp-ledger.toml` is case-sensitive. Common mistakes:
-- `/.well-known/XRP-Ledger.toml` (wrong case)
-- `/xrp-ledger.toml` (missing .well-known)
-- `/.well_known/xrp-ledger.toml` (underscore instead of hyphen)
-
-**5. Hosting TOML on Validator**
-
-> **Security Warning:** Do NOT run a web server on your validator. Host the TOML file on a separate machine.
-
-**6. Confusing Public Key with Token**
-
-| Safe to Share | NEVER Share |
-|---------------|-------------|
-| `public_key` (starts with `n`) | `validator_token` |
-| `attestation` | `validator-keys.json` contents |
-| Contact info | Master private key |
-
-### Step-by-Step Setup
-
-**Prerequisites**
-- Domain with HTTPS web server (not on your validator)
-- Valid SSL certificate from a recognized CA
-- Access to your `validator-keys.json` (stored offline)
-
-**Step 1: Generate Attestation**
-
-On a secure machine with your `validator-keys.json`:
-
-```bash
-validator-keys set_domain YOUR_DOMAIN.COM
-```
-
-Output:
-```
-The domain attestation for validator nHDG5CRU... is:
-
-attestation="A59AB577E14A7BEC053752FBFE78C3DE..."
-
-Update rippled.cfg with this validator token:
-
-[validator_token]
-eyJ2YWxpZGF0...
-```
-
-**Step 2: Create TOML File**
-
-```toml
-[METADATA]
-modified = 2024-01-15T00:00:00.000Z
-
-[[VALIDATORS]]
-public_key = "nHDG5CRUHp17ShsEdRweMc7WsA4csiL7qEjdZbRVTr74wa5QyqoF"
-attestation = "A59AB577E14A7BEC053752FBFE78C3DED6DCEC81A7C41DF1931BC61742BB4FAE..."
-network = "main"
-owner_country = "US"
-
-[[PRINCIPALS]]
-name = "Your Organization"
-email = "validator@yourdomain.com"
-```
-
-**Step 3: Deploy TOML**
-
-Upload to your web server at `/.well-known/xrp-ledger.toml`
-
-**Step 4: Configure CORS**
-
-Add CORS headers (see Nginx/Apache examples above).
-
-**Step 5: Update rippled.cfg**
-
-On your validator, update the token from Step 1:
-
-```ini
-[validator_token]
-eyJ2YWxpZGF0aW9uX3NlY3JldF9r...
-```
-
-Restart rippled:
-```bash
-sudo systemctl restart rippled
-```
-
-**Step 6: Verify**
-
-1. Browser check: Visit `https://YOUR_DOMAIN/.well-known/xrp-ledger.toml`
-2. [TOML Checker](https://xrpl.org/resources/dev-tools/xrp-ledger-toml-checker)
-3. [Domain Verifier](https://xrpl.org/resources/dev-tools/domain-verifier)
-
-> **Note:** Third-party sites like [Bithomp](https://bithomp.com/en/domains) and [XRPSCAN](https://xrpscan.com/validators) may take up to 24 hours to reflect your verified domain.
-
-**Source**
-
-See [xrp-ledger.toml specification](https://xrpl.org/docs/references/xrp-ledger-toml) for complete field reference.
-
----
-
-# Validator Keys
+## Validator Keys
 
 Validator key management is the most critical security aspect of running a validator. Understanding the key hierarchy and keeping your master key offline protects your validator identity.
 
@@ -1237,100 +636,631 @@ See [validator-keys-tool guide](https://github.com/ripple/validator-keys-tool/bl
 
 ---
 
-# Community Resources
+# Phase 3: Identity
 
-After deployment, you'll want to verify your node is visible, stay informed about network changes, and know where to get help. These resources are essential for ongoing operations.
-
-### Network Explorers
-
-Use these to verify your node's visibility and check network status:
-
-| Resource | URL | What It Shows |
-|----------|-----|---------------|
-| **XRPL Explorer** | [livenet.xrpl.org](https://livenet.xrpl.org) | Official explorer. Account lookups, transactions, validator list at `/network/validators` |
-| **Bithomp** | [bithomp.com](https://bithomp.com) | Explorer with validator tracking, domain verification status, and account analytics |
-| **XRPL Cluster** | [xrplcluster.com](https://xrplcluster.com) | Community WebSocket endpoint with geographic routing. Stats at [xrpl.ws-stats.com](https://xrpl.ws-stats.com) |
-
-### Validator Directories
-
-These sites track validator performance and UNL status:
-
-| Resource | URL | What It Shows |
-|----------|-----|---------------|
-| **XRPSCAN Validators** | [xrpscan.com/validators](https://xrpscan.com/validators) | All validators, domain verification, UNL membership, server versions, amendment votes |
-| **XRPSCAN Amendments** | [xrpscan.com/amendments](https://xrpscan.com/amendments) | Amendment voting status, percentage support, expected activation |
-| **Bithomp Validators** | [bithomp.com/validators](https://bithomp.com/validators) | Validator listings, UNL tracking |
-
-**Post-deployment checklist:**
-1. Verify your validator appears on XRPSCAN
-2. Confirm domain verification shows correctly
-3. Check your amendment votes are recorded
-4. Monitor your agreement percentage over time
-
-### Staying Informed
-
-**Mailing Lists (Essential)**
-
-| List | URL | Content |
-|------|-----|---------|
-| **ripple-server** | [groups.google.com/g/ripple-server](https://groups.google.com/g/ripple-server) | Release announcements, upgrade warnings, amendment alerts. **Subscribe to this.** |
-| **xrpl-announce** | [groups.google.com/g/xrpl-announce](https://groups.google.com/g/xrpl-announce) | Client library updates (~1 email/week) |
-
-**Discord Servers**
-
-| Server | Invite | Focus |
-|--------|--------|-------|
-| **XRP Ledger (Official)** | [discord.com/invite/xrpl](https://discord.com/invite/xrpl) | Community discussions, technical help, announcements |
-| **XRPL Developers** | [discord.com/invite/CVG6Q2S3R8](https://discord.com/invite/CVG6Q2S3R8) | Developer-focused discussions |
-
-**Other Channels**
-
-| Resource | URL | Content |
-|----------|-----|---------|
-| **XRPL Blog** | [xrpl.org/blog](https://xrpl.org/blog) | Release notes, amendment activations, technical updates |
-| **XRPChat** | [xrpchat.com](https://xrpchat.com) | Long-running community forum with technical discussions |
-| **GitHub Releases** | [github.com/XRPLF/rippled/releases](https://github.com/XRPLF/rippled/releases) | Release notes and changelogs |
-
-**Twitter/X Accounts**
-
-- [@RippleXDev](https://twitter.com/RippleXDev) - Protocol changes, infrastructure updates
-- [@XRPLLabs](https://twitter.com/XRPLLabs) - XRPL Labs updates, Hooks amendment news
-
-### Getting Help
-
-**Troubleshooting Resources**
-
-| Resource | URL | Use For |
-|----------|-----|---------|
-| **Troubleshooting Guide** | [xrpl.org/docs/infrastructure/troubleshooting](https://xrpl.org/docs/infrastructure/troubleshooting) | Diagnosing problems, log messages, health checks |
-| **Known Amendments** | [xrpl.org/resources/known-amendments](https://xrpl.org/resources/known-amendments) | Amendment details and voting information |
-| **GitHub Issues** | [github.com/XRPLF/rippled/issues](https://github.com/XRPLF/rippled/issues) | Bug reports, feature requests |
-
-**Quick Diagnostics**
-
-```bash
-# Check server status
-rippled server_info
-
-# Health check
-curl http://localhost:51235/health
-
-# Check if amendment blocked
-rippled server_info | grep amendment_blocked
-```
-
-**Where to Ask Questions**
-
-1. **XRP Ledger Discord** - #technical-discussions for quick questions
-2. **XRPChat Technical Discussion** - For detailed questions with context
-3. **ripple-server mailing list** - For upgrade-related questions
-4. **GitHub Issues** - For bugs (include logs and config)
-
-> **Tip:** When asking for help, include: rippled version (`rippled --version`), `server_info` output, relevant log entries, and your OS/hardware specs.
+For validators, identity matters. This phase covers domain verification and fee voting - concepts to understand before your validator goes live. Note that domain verification can only be completed after your validator is running (Phase 4), but you should understand the process and prepare your domain beforehand.
 
 ---
 
-# Putting It All Together
+## Domain Verification
+
+Domain verification establishes a cryptographic link between your validator and a domain you control. This is **required** for UNL consideration and helps the community identify legitimate validators.
+
+<p align="center">
+  <img src="../images/validator-domain-verification.png" alt="Validator Domain Verification Flow" width="650">
+</p>
+
+### xrp-ledger.toml
+
+**The Bottom Line**
+
+Host a `xrp-ledger.toml` file at `https://YOUR_DOMAIN/.well-known/xrp-ledger.toml` with your validator's public key and attestation.
+
+**What It Does**
+
+The `xrp-ledger.toml` file creates a two-way trust link:
+1. Your validator announces "I belong to this domain" (via rippled config)
+2. Your domain announces "This validator belongs to me" (via the TOML file)
+
+Verification tools check both directions to confirm the link is legitimate.
+
+**File Structure**
+
+```toml
+# xrp-ledger.toml
+
+[METADATA]
+modified = 2024-01-15T00:00:00.000Z
+
+[[VALIDATORS]]
+public_key = "nHUjYWSeiAepbkkrmwmQXFnohhr6Vy5oFK9Gk6TUF6MAT4qSiXSK"
+attestation = "9A379A630BA161A3E7A0969E472FAA82C1542FF24C412250C86AAEF55209DD35..."
+network = "main"
+owner_country = "US"
+server_country = "DE"
+unl = "https://vl.ripple.com"
+
+[[PRINCIPALS]]
+name = "Your Name or Organization"
+email = "validator@example.com"
+```
+
+**Field Reference**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `public_key` | Yes | Master public key (starts with `n`) |
+| `attestation` | Yes | Hex signature linking validator to domain |
+| `network` | Yes | `main`, `testnet`, or custom chain ID |
+| `owner_country` | No | Two-letter ISO country code (owner jurisdiction) |
+| `server_country` | No | Two-letter ISO country code (server location) |
+| `unl` | No | URL of validator list you follow |
+
+> **Note:** Use `[[VALIDATORS]]` with double brackets. This is TOML array-of-tables syntax. Single brackets `[VALIDATORS]` will fail.
+
+### Common Mistakes
+
+**1. Domain Mismatch (Most Common)**
+
+The domain in your attestation must **exactly match** where the TOML is served:
+
+| TOML Location | Domain Must Be |
+|---------------|----------------|
+| `https://example.com/.well-known/xrp-ledger.toml` | `example.com` |
+| `https://www.example.com/.well-known/xrp-ledger.toml` | `www.example.com` |
+| `https://validator.example.com/.well-known/xrp-ledger.toml` | `validator.example.com` |
+
+If you run the `set_domain` command with `example.com` but serve the TOML from `www.example.com`, verification will fail.
+
+**2. Missing CORS Headers**
+
+Verification tools run in browsers and need CORS enabled. Without it, requests are blocked.
+
+**Nginx:**
+```nginx
+location /.well-known/xrp-ledger.toml {
+    default_type application/toml;
+    add_header 'Access-Control-Allow-Origin' '*';
+}
+```
+
+**Apache:**
+```apache
+<Location "/.well-known/xrp-ledger.toml">
+    Header set Access-Control-Allow-Origin "*"
+</Location>
+```
+
+**3. SSL/TLS Issues**
+
+- Must use HTTPS (not HTTP)
+- Must use a valid certificate from a recognized CA
+- Self-signed certificates will fail
+- Expired certificates will fail
+
+**4. Wrong Path**
+
+The path `/.well-known/xrp-ledger.toml` is case-sensitive. Common mistakes:
+- `/.well-known/XRP-Ledger.toml` (wrong case)
+- `/xrp-ledger.toml` (missing .well-known)
+- `/.well_known/xrp-ledger.toml` (underscore instead of hyphen)
+
+**5. Hosting TOML on Validator**
+
+> **Security Warning:** Do NOT run a web server on your validator. Host the TOML file on a separate machine.
+
+**6. Confusing Public Key with Token**
+
+| Safe to Share | NEVER Share |
+|---------------|-------------|
+| `public_key` (starts with `n`) | `validator_token` |
+| `attestation` | `validator-keys.json` contents |
+| Contact info | Master private key |
+
+### Step-by-Step Setup
+
+**Prerequisites**
+- Domain with HTTPS web server (not on your validator)
+- Valid SSL certificate from a recognized CA
+- Access to your `validator-keys.json` (stored offline)
+
+**Step 1: Generate Attestation**
+
+On a secure machine with your `validator-keys.json`:
+
+```bash
+validator-keys set_domain YOUR_DOMAIN.COM
+```
+
+Output:
+```
+The domain attestation for validator nHDG5CRU... is:
+
+attestation="A59AB577E14A7BEC053752FBFE78C3DE..."
+
+Update rippled.cfg with this validator token:
+
+[validator_token]
+eyJ2YWxpZGF0...
+```
+
+**Step 2: Create TOML File**
+
+```toml
+[METADATA]
+modified = 2024-01-15T00:00:00.000Z
+
+[[VALIDATORS]]
+public_key = "nHDG5CRUHp17ShsEdRweMc7WsA4csiL7qEjdZbRVTr74wa5QyqoF"
+attestation = "A59AB577E14A7BEC053752FBFE78C3DED6DCEC81A7C41DF1931BC61742BB4FAE..."
+network = "main"
+owner_country = "US"
+
+[[PRINCIPALS]]
+name = "Your Organization"
+email = "validator@yourdomain.com"
+```
+
+**Step 3: Deploy TOML**
+
+Upload to your web server at `/.well-known/xrp-ledger.toml`
+
+**Step 4: Configure CORS**
+
+Add CORS headers (see Nginx/Apache examples above).
+
+**Step 5: Update rippled.cfg**
+
+On your validator, update the token from Step 1:
+
+```ini
+[validator_token]
+eyJ2YWxpZGF0aW9uX3NlY3JldF9r...
+```
+
+Restart rippled:
+```bash
+sudo systemctl restart rippled
+```
+
+**Step 6: Verify**
+
+1. Browser check: Visit `https://YOUR_DOMAIN/.well-known/xrp-ledger.toml`
+2. [TOML Checker](https://xrpl.org/resources/dev-tools/xrp-ledger-toml-checker)
+3. [Domain Verifier](https://xrpl.org/resources/dev-tools/domain-verifier)
+
+> **Note:** Third-party sites like [Bithomp](https://bithomp.com/en/domains) and [XRPSCAN](https://xrpscan.com/validators) may take up to 24 hours to reflect your verified domain.
+
+**Source**
+
+See [xrp-ledger.toml specification](https://xrpl.org/docs/references/xrp-ledger-toml) for complete field reference.
+
+---
+
+## Fee Voting
+
+**The Bottom Line**
+
+**Use the network defaults unless you have strong governance reasons to deviate.**
+
+```ini
+[voting]
+reference_fee = 10
+account_reserve = 1000000
+owner_reserve = 200000
+```
+
+**What These Values Mean**
+
+| Setting | Value | Human Readable | Purpose |
+|---------|-------|----------------|---------|
+| reference_fee | 10 | 0.00001 XRP | Base transaction cost |
+| account_reserve | 1000000 | 1 XRP | Minimum balance to activate account |
+| owner_reserve | 200000 | 0.2 XRP | Cost per owned object (trustline, offer, etc.) |
+
+**How Fee Voting Works**
+
+Validators vote on these values. The network uses the **median** of all validator votes. This means:
+
+- Your vote alone won't change anything
+- Changing network fees requires coordinated validator consensus
+- Outlier votes are ignored
+
+**Philosophy Behind Current Values**
+
+- **reference_fee (10 drops)**: Low enough for normal use, high enough to make spam expensive at scale
+- **account_reserve (1 XRP)**: Prevents ledger bloat from millions of empty accounts
+- **owner_reserve (0.2 XRP)**: Makes users think twice before creating objects that live forever in the ledger
+
+**When to Vote Differently**
+
+Rarely. Fee changes are network governance decisions. Only deviate if:
+- You're participating in a coordinated network-wide fee adjustment
+- You have data showing current fees are causing problems
+- You've discussed with other validators
+
+---
+
+# Phase 4: Installation & Configuration
+
+Now that you understand the infrastructure, security, and identity requirements, it's time to install and configure rippled.
+
+---
+
+## Node Sizing
+
+### node_size
+
+**The Bottom Line**
+
+**Match `node_size` to your available RAM.** This is the single most important sizing decision.
+
+| Value | RAM Needed | Use Case |
+|-------|------------|----------|
+| tiny | 1-2 GB | Testing only |
+| small | 4-8 GB | Light stock node |
+| medium | 8-16 GB | Standard stock node |
+| large | 16-32 GB | Busy stock node |
+| huge | 32-64 GB | Validators, high-traffic nodes |
+
+**What It Controls**
+
+The `node_size` parameter is a macro that tunes multiple internal settings:
+
+- Memory allocation for caches
+- Number of worker threads
+- Database buffer sizes
+- Fetch pack sizes for historical data
+
+**Why It Matters**
+
+- **Undersized**: Node falls behind, misses ledgers, poor sync performance
+- **Oversized**: Wastes memory, no performance benefit
+- **Just right**: Smooth operation with efficient resource use
+
+**Configuration**
+
+```ini
+[node_size]
+huge
+```
+
+No other parameters needed - rippled auto-tunes everything else based on this value.
+
+**Common Mistake**
+
+Don't try to manually tune thread counts or cache sizes. rippled's auto-tuning based on `node_size` is well-tested. Manual overrides often make things worse.
+
+---
+
+## Database Management
+
+### online_delete Tuning
+
+**The Bottom Line**
+
+**Set `online_delete` to at least 16384, preferably 32768.** The default value (512) causes I/O storms that hurt validator performance.
+
+| Scenario | online_delete | Rationale |
+|----------|---------------|-----------|
+| Default (not recommended) | 512-2000 | Causes I/O storms |
+| Minimum stable | 8192 | ~8 hours between deletes |
+| **Recommended** | **16384-32768** | **14-36 hours between deletes** |
+| Conservative | 50000+ | Days between deletes, if disk permits |
+
+**The Problem: I/O Storms**
+
+Even on high-spec hardware (150k IOPS NVMe, 80 cores, 128 GB RAM), validators experience dropped ledgers due to I/O storms triggered by low `online_delete` values. The pattern is distinctive:
+
+**Sawtooth Pattern (Low online_delete = 512):**
+```
+IOPS
+30k ┤        ╭─╮        ╭─╮        ╭─╮        ╭─╮
+    │       ╱   ╲       ╱  ╲       ╱  ╲       ╱  ╲    ← Delete storms
+15k ┤      ╱     ╲     ╱    ╲     ╱    ╲     ╱    ╲
+    │     ╱       ╲   ╱      ╲   ╱      ╲   ╱      ╲
+ 0k ┼────╱─────────╲─╱────────╲─╱────────╲─╱────────╲──
+    └────┴──────────┴──────────┴──────────┴──────────┴────► Time
+         ~30min    ~30min    ~30min    ~30min
+```
+
+**Smooth Pattern (High online_delete = 16384+):**
+```
+IOPS
+30k ┤
+    │
+15k ┤
+    │  ────────────────────────────────────────────  ← Steady state
+ 0k ┼
+    └──────────────────────────────────────────────────► Time
+```
+
+**Why NuDB Makes This Worse**
+
+NuDB (rippled's ledger database) is optimized for append-mostly workloads:
+
+- **Writes are fast:** Sequential appends are efficient
+- **Deletes are expensive:** Requires compaction and reorganization
+- **Frequent small deletes = worst case for NuDB**
+
+By increasing `online_delete`, you allow NuDB to operate in its optimal mode (appending) for longer periods before incurring deletion overhead.
+
+**The Rotation Mechanism**
+
+rippled maintains two NuDB databases simultaneously:
+- **"Writable" DB** - receives new/modified nodes
+- **"Archive" DB** - the older database being phased out
+
+During rotation, rippled copies all nodes that **weren't modified** since the last rotation from archive to writable. This copy operation is the expensive step.
+
+**The math:**
+- Lower `online_delete` → fewer ledgers between rotations → fewer transactions → fewer modified nodes
+- Fewer modified nodes → **more nodes must be copied** during rotation
+- More copying → I/O spikes → potential missed consensus rounds
+
+**Extreme example:** If you rotated every ledger and only 6 accounts changed, you'd copy millions of unchanged nodes. With 32,768 ledgers between rotations, far more nodes have been naturally modified, so fewer need copying.
+
+**Impact on Validator Performance**
+
+| Metric | During Delete Storm | Normal Operation |
+|--------|---------------------|------------------|
+| I/O latency | Spikes to 10-100+ ms | 1-2 ms |
+| Consensus participation | May miss rounds | Full participation |
+| Agreement % | Drops periodically | Stable |
+| server_state | May flicker | Steady proposing |
+
+A validator can have perfect agreement scores most of the time but experience periodic drops during I/O storms.
+
+**The Trade-off**
+
+| online_delete | Disk Space | I/O Pattern | Delete Frequency |
+|---------------|------------|-------------|------------------|
+| 512 | ~250 MB | Sawtooth (bad) | Every 30 min |
+| 2000 | ~1 GB | Spiky | Every 2 hours |
+| 16384 | ~8-12 GB | Smooth | Every 14-18 hours |
+| 32768 | ~16-24 GB | Very smooth | Every 36 hours |
+
+**The trade-off is minimal:** Even at 16384, you're only using ~8-12 GB more disk space in exchange for dramatically smoother I/O and more stable validation.
+
+**Configuration**
+
+```ini
+[node_db]
+type=NuDB
+path=/var/lib/rippled/db/nudb
+online_delete=32768
+advisory_delete=0
+
+[ledger_history]
+32768
+```
+
+> **Note:** `ledger_history` must be ≤ `online_delete`.
+
+**Verifying the Change**
+
+After changing `online_delete` and restarting rippled:
+
+1. The first delete cycle will still occur at the previous threshold
+2. The smooth I/O pattern becomes visible after ledger count exceeds the new threshold
+3. Monitor your disk I/O - the sawtooth pattern should disappear
+
+**Additional Tuning Parameters**
+
+If you still experience issues, these parameters in `[node_db]` may help:
+- `age_threshold_seconds` - minimum age before deletion eligible
+- `recovery_wait_seconds` - delay before rotation resumes after interruption
+
+**The One Rule**
+
+**Never use low values to "save disk space."** You'll pay for it in I/O storms and degraded validator performance. Disk is cheap; validator reputation isn't.
+
+**Source**
+
+This issue was identified by [@shortthefomo](https://github.com/shortthefomo) and documented in [rippled issue #6202](https://github.com/XRPLF/rippled/issues/6202), with technical explanation from Ripple engineer [@ximinez](https://github.com/ximinez).
+
+### advisory_delete
+
+**The Bottom Line**
+
+**Use `advisory_delete=0` (the default).** Let rippled manage deletion automatically.
+
+**What It Does**
+
+| Value | Behavior |
+|-------|----------|
+| 0 | rippled decides when to delete old ledgers (automatic) |
+| 1 | rippled waits for an external signal before deleting |
+
+**When to Use Each**
+
+- **`0` (recommended)**: Standard deployments. rippled handles everything.
+- **`1`**: Only if you have external tooling that needs to process ledger data before deletion, or you're running a specialized archival integration.
+
+**Configuration**
+
+```ini
+[node_db]
+type=NuDB
+path=/var/lib/rippled/db/nudb
+advisory_delete=0
+online_delete=32768
+```
+
+---
+
+## Network Configuration
+
+### compression
+
+**The Bottom Line**
+
+**Always enable compression.** There's no good reason to disable it.
+
+```ini
+[compression]
+true
+```
+
+**What It Does**
+
+Compresses peer protocol messages using LZ4. Reduces bandwidth usage by 60-80% with negligible CPU overhead.
+
+**When to Disable**
+
+Almost never. The only scenario: you're on a local network with unlimited bandwidth and you're chasing microseconds of latency. Even then, the savings are marginal.
+
+### peers_max
+
+**The Bottom Line**
+
+**21-30 for validators, 15-21 for stock nodes.**
+
+| Node Type | Recommended | Notes |
+|-----------|-------------|-------|
+| Validator | 21-30 | Enough for reliable propagation |
+| Stock node | 15-21 | Balance between connectivity and resources |
+| Private/minimal | 10-15 | Minimum viable connectivity |
+
+**The Trade-off**
+
+- **More peers**: Faster transaction/ledger propagation, more redundancy if peers drop
+- **Fewer peers**: Less bandwidth, CPU, and memory usage
+
+**Why Validators Don't Need Huge Counts**
+
+Validators receive transactions from the network and propagate validations. They don't need 100 peers - they need *enough* peers to stay reliably connected. 21 well-connected peers is plenty.
+
+**Configuration**
+
+```ini
+[peers_max]
+21
+```
+
+---
+
+## Time Synchronization
+
+### sntp_servers
+
+**The Bottom Line**
+
+**Configure multiple diverse time sources.** Consensus depends on accurate time.
+
+```ini
+[sntp_servers]
+time.nist.gov
+pool.ntp.org
+time.cloudflare.com
+time.google.com
+```
+
+**Why Multiple Servers**
+
+- **Redundancy**: If one server is unreachable, others provide time
+- **Cross-checking**: rippled can detect if one source is wrong
+- **Low latency**: Different providers have different geographic coverage
+
+**Good Server Choices**
+
+| Server | Type | Notes |
+|--------|------|-------|
+| time.nist.gov | Government | US-based, authoritative |
+| pool.ntp.org | Community pool | Anycast, global |
+| time.cloudflare.com | CDN | Low latency globally |
+| time.google.com | CDN | Smeared leap seconds |
+
+**Why Time Matters**
+
+The XRP Ledger consensus protocol uses timestamps. Clock drift can cause:
+- Validation timing issues
+- Transactions appearing to be in the future/past
+- Sync problems with other validators
+
+Your system should also run ntpd or chronyd for OS-level time sync.
+
+---
+
+## Operational Settings
+
+### log_level
+
+**The Bottom Line**
+
+**Run `warning` in production.** Only increase for troubleshooting.
+
+| Level | Verbosity | Disk Impact | Use Case |
+|-------|-----------|-------------|----------|
+| trace | Extreme | GB/hour | Deep debugging only |
+| debug | High | Large | Development, troubleshooting |
+| info | Medium | Moderate | Default (too verbose for production) |
+| **warning** | **Low** | **Minimal** | **Production recommended** |
+| error | Very low | Very low | Only problems |
+| fatal | Minimal | Negligible | Almost nothing |
+
+**Configuration**
+
+Set via `[rpc_startup]` to apply at boot:
+
+```ini
+[rpc_startup]
+{ "command": "log_level", "severity": "warning" }
+```
+
+**Runtime Adjustment**
+
+Temporarily increase for debugging without restart:
+
+```bash
+rippled log_level debug
+```
+
+Then set back:
+
+```bash
+rippled log_level warning
+```
+
+**Why Not `info`?**
+
+The default `info` level logs every ledger close, peer connection, and many routine operations. On a busy validator, this generates significant disk I/O. `warning` logs only things that might need attention.
+
+### ssl_verify
+
+**The Bottom Line**
+
+**Always `1` in production.** Never disable SSL verification.
+
+```ini
+[ssl_verify]
+1
+```
+
+**What It Does**
+
+| Value | Behavior |
+|-------|----------|
+| 1 | Verify SSL certificates for outbound connections |
+| 0 | Skip verification (INSECURE) |
+
+**Why It Matters**
+
+rippled makes HTTPS connections to validator list publishers (vl.ripple.com, unl.xrplf.org). SSL verification ensures:
+
+- You're actually talking to the real publisher
+- No man-in-the-middle can inject a malicious validator list
+- Your node won't trust fake validators
+
+**When `0` is Acceptable**
+
+- Local development with self-signed certificates
+- Isolated test networks
+- Never in production
+
+---
+
+## Putting It All Together
 
 This section provides a complete, production-ready `rippled.cfg` example for a validator. Use this as a starting point and adjust for your environment.
 
@@ -1657,10 +1587,185 @@ The static IP pattern follows the principle of least privilege.
 
 ---
 
+# Phase 5: Operations
+
+Your validator is running. Now you need to keep it running well. This phase covers monitoring, upgrades, and ongoing maintenance.
+
+---
+
+## Monitoring
+
+You can't fix what you can't see. Monitor:
+
+- **Server state**: Should be `proposing` (validator) or `full` (stock node). Alert on `disconnected`, `connected`, or `syncing`.
+- **Agreement percentage**: Your votes vs. consensus outcome.
+- **Resource utilization**: CPU, memory, disk I/O, network.
+- **Peer connections**: Healthy count, no sudden drops.
+- **Ledger sync**: Are you keeping up with the network?
+
+For a turnkey solution, the [XRPL Validator Dashboard](https://github.com/realgrapedrop/xrpl-validator-dashboard) provides full-service monitoring built specifically for validator operators. It tracks 40+ rippled metrics via WebSocket and HTTP APIs *plus* system metrics (CPU, memory, disk I/O, network). Includes pre-configured alerts for critical states and supports Discord, Slack, PagerDuty, and other notification channels. Deploys as a single Docker stack - no libraries or dependencies on your rippled machine. Can run on a separate machine entirely for better security (see [Hardened Architecture](https://github.com/realgrapedrop/xrpl-validator-dashboard/blob/main/docs/HARDENED_ARCHITECTURE.md)).
+
+Prometheus + Grafana is an alternative for system metrics, but you'll need additional tooling to monitor rippled-specific metrics like server state, agreement percentage, or peer connections.
+
+**Quick Diagnostics**
+
+```bash
+# Check server status
+rippled server_info
+
+# Health check
+curl http://localhost:51235/health
+
+# Check if amendment blocked
+rippled server_info | grep amendment_blocked
+```
+
+---
+
+## Upgrading Rippled
+
+*This section is a placeholder. Content coming soon.*
+
+**Key Topics to Cover:**
+- Subscribe to release notifications
+- Upgrade promptly, especially when amendments are approaching activation
+- Test configuration changes on a non-production node first
+- Amendment-blocked servers can't participate in consensus
+
+---
+
+## Maintenance
+
+*This section is a placeholder. Content coming soon.*
+
+**Key Topics to Cover:**
+- Log rotation and disk space management
+- Database maintenance
+- Certificate renewal (if applicable)
+- Backup procedures for validator keys
+- Disaster recovery planning
+
+---
+
+# Phase 6: Community & Reputation
+
+For validators, building trust takes time. This phase covers community engagement, directory registration, and the long path to UNL inclusion.
+
+---
+
+## Community Resources
+
+After deployment, you'll want to verify your node is visible, stay informed about network changes, and know where to get help.
+
+### Network Explorers
+
+Use these to verify your node's visibility and check network status:
+
+| Resource | URL | What It Shows |
+|----------|-----|---------------|
+| **XRPL Explorer** | [livenet.xrpl.org](https://livenet.xrpl.org) | Official explorer. Account lookups, transactions, validator list at `/network/validators` |
+| **Bithomp** | [bithomp.com](https://bithomp.com) | Explorer with validator tracking, domain verification status, and account analytics |
+| **XRPL Cluster** | [xrplcluster.com](https://xrplcluster.com) | Community WebSocket endpoint with geographic routing. Stats at [xrpl.ws-stats.com](https://xrpl.ws-stats.com) |
+
+### Staying Informed
+
+**Mailing Lists (Essential)**
+
+| List | URL | Content |
+|------|-----|---------|
+| **ripple-server** | [groups.google.com/g/ripple-server](https://groups.google.com/g/ripple-server) | Release announcements, upgrade warnings, amendment alerts. **Subscribe to this.** |
+| **xrpl-announce** | [groups.google.com/g/xrpl-announce](https://groups.google.com/g/xrpl-announce) | Client library updates (~1 email/week) |
+
+**Discord Servers**
+
+| Server | Invite | Focus |
+|--------|--------|-------|
+| **XRP Ledger (Official)** | [discord.com/invite/xrpl](https://discord.com/invite/xrpl) | Community discussions, technical help, announcements |
+| **XRPL Developers** | [discord.com/invite/CVG6Q2S3R8](https://discord.com/invite/CVG6Q2S3R8) | Developer-focused discussions |
+
+**Other Channels**
+
+| Resource | URL | Content |
+|----------|-----|---------|
+| **XRPL Blog** | [xrpl.org/blog](https://xrpl.org/blog) | Release notes, amendment activations, technical updates |
+| **XRPChat** | [xrpchat.com](https://xrpchat.com) | Long-running community forum with technical discussions |
+| **GitHub Releases** | [github.com/XRPLF/rippled/releases](https://github.com/XRPLF/rippled/releases) | Release notes and changelogs |
+
+**Twitter/X Accounts**
+
+- [@RippleXDev](https://twitter.com/RippleXDev) - Protocol changes, infrastructure updates
+- [@XRPLLabs](https://twitter.com/XRPLLabs) - XRPL Labs updates, Hooks amendment news
+
+### Getting Help
+
+**Troubleshooting Resources**
+
+| Resource | URL | Use For |
+|----------|-----|---------|
+| **Troubleshooting Guide** | [xrpl.org/docs/infrastructure/troubleshooting](https://xrpl.org/docs/infrastructure/troubleshooting) | Diagnosing problems, log messages, health checks |
+| **Known Amendments** | [xrpl.org/resources/known-amendments](https://xrpl.org/resources/known-amendments) | Amendment details and voting information |
+| **GitHub Issues** | [github.com/XRPLF/rippled/issues](https://github.com/XRPLF/rippled/issues) | Bug reports, feature requests |
+
+**Where to Ask Questions**
+
+1. **XRP Ledger Discord** - #technical-discussions for quick questions
+2. **XRPChat Technical Discussion** - For detailed questions with context
+3. **ripple-server mailing list** - For upgrade-related questions
+4. **GitHub Issues** - For bugs (include logs and config)
+
+> **Tip:** When asking for help, include: rippled version (`rippled --version`), `server_info` output, relevant log entries, and your OS/hardware specs.
+
+---
+
+## Directories
+
+These sites track validator performance and UNL status. Register your validator to build visibility.
+
+| Resource | URL | What It Shows |
+|----------|-----|---------------|
+| **XRPSCAN Validators** | [xrpscan.com/validators](https://xrpscan.com/validators) | All validators, domain verification, UNL membership, server versions, amendment votes |
+| **XRPSCAN Amendments** | [xrpscan.com/amendments](https://xrpscan.com/amendments) | Amendment voting status, percentage support, expected activation |
+| **Bithomp Validators** | [bithomp.com/validators](https://bithomp.com/validators) | Validator listings, UNL tracking |
+
+**Post-deployment checklist:**
+1. Verify your validator appears on XRPSCAN
+2. Confirm domain verification shows correctly
+3. Check your amendment votes are recorded
+4. Monitor your agreement percentage over time
+
+---
+
+## Building Reputation
+
+Getting on a UNL isn't automatic. It's earned over time.
+
+**What UNL Publishers Look For**
+
+| Criteria | Why It Matters |
+|----------|----------------|
+| **1+ year of reliable operation** | Anyone can run a validator for a week. Consistency over time demonstrates commitment. |
+| **High uptime and agreement** | The numbers don't lie. >99% on both metrics. |
+| **Domain verification** | Proves identity and enables accountability. |
+| **Separate entity** | Not an employee of an existing validator operator. |
+| **Geographic diversity** | Different data centers, regions, and jurisdictions strengthen the network. |
+| **Public identity** | The community should know who you are. |
+
+**Steps to Build Reputation**
+
+1. Run reliably for the long haul. There are no shortcuts.
+2. Set up domain verification from day one.
+3. Publish your validator's public key on your website.
+4. Register on validator directories like XRPSCAN.
+5. Engage with the XRPL community.
+6. Be transparent about your operations.
+7. Consider running in an underrepresented region or on less-common infrastructure.
+
+---
+
 # Contributing
 
 This document is maintained by [xrp-validator.grapedrop.xyz](https://xrp-validator.grapedrop.xyz). Contributions, corrections, and additional insights are welcome.
 
 ---
 
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-19*
