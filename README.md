@@ -4,6 +4,8 @@
 
 Operational intelligence for XRP Ledger validators and stock nodes. Compiled from production experience and core developer insights. The reference guide we wish we had when we started running validators.
 
+**This is a community project.** Running a node or validator? [Share what you've learned.](#contributing)
+
 ---
 
 ## What is rippled?
@@ -242,7 +244,15 @@ This guide draws from official documentation, core developer insights, and produ
 
 ## Contributing
 
-Found something that should be in here? Have a correction or additional insight? Open an issue or PR.
+This is a community-driven project. If you run rippled as a stock node or validator, your operational experience is valuable. Hard-won lessons, edge cases, and configuration insights that helped you can help others.
+
+**How to contribute:**
+
+1. **Open a GitHub issue** with your content, insight, or correction
+2. Submissions are reviewed for accuracy and fit
+3. Accepted contributions are incorporated into the Field Guide
+
+No pull request required—just describe what you learned and we'll handle the formatting. Whether it's a single configuration tip or a full section on a topic we haven't covered, it's welcome here.
 
 ---
 
