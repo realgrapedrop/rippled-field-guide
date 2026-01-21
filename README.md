@@ -252,7 +252,7 @@ This is a community-driven project. If you run rippled as a stock node or valida
 2. Submissions are reviewed for accuracy and fit
 3. Accepted contributions are incorporated into the Field Guide
 
-No pull request required—just describe what you learned and we'll handle the formatting. Whether it's a single configuration tip or a full section on a topic we haven't covered, it's welcome here.
+No pull request required—just describe what you learned and I will handle the formatting. Whether it's a single configuration tip or a full section on a topic we haven't covered, it's welcome here.
 
 ---
 
