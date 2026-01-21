@@ -8,6 +8,12 @@ Operational intelligence for XRP Ledger validators and stock nodes. Compiled fro
 
 ---
 
+## Ready to Get Your Hands Dirty?
+
+We recommend reading through this README to understand the commitment. But if you're the type who reads the manual after the thing's already on fire, head straight to **[The Rippled Field Guide](docs/RIPPLED-FIELD-GUIDE.md)**.
+
+---
+
 ## What is rippled?
 
 [rippled](https://github.com/XRPLF/rippled) is the reference server implementation for the XRP Ledger, a decentralized public blockchain built for fast, low-cost, and reliable value transfer. Unlike proof-of-work or proof-of-stake networks, the XRP Ledger uses a unique consensus protocol where a network of independent validators agrees on the order and validity of transactions every 3-5 seconds.
