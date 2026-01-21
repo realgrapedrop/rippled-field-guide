@@ -1437,7 +1437,7 @@ time.google.com
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| `node_size=huge` | 64 GB RAM allocation | Matches our hardware |
+| `node_size=huge` | 64 GB RAM allocation | Matches my hardware |
 | `online_delete=32768` | ~36 hours between deletes | Prevents I/O storms |
 | `peer_private=1` | Hides validator IP | Security best practice |
 | `peers_max=21` | 21 peer connections | Sufficient for reliable propagation |

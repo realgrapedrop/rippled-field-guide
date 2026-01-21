@@ -2,7 +2,7 @@
   <img src="images/rippled-field-guide-logo.gif" alt="The Rippled Field Guide" width="400">
 </p>
 
-Operational intelligence for XRP Ledger validators and stock nodes. Compiled from production experience and core developer insights. The reference guide we wish we had when we started running validators.
+Operational intelligence for XRP Ledger validators and stock nodes. Compiled from production experience and core developer insights. The reference guide I wish I had when I started running validators.
 
 **This is a community project.** Running a node or validator? [Share what you've learned.](#contributing)
 
@@ -258,7 +258,7 @@ This is a community driven project. If you run rippled as a stock node or valida
 2. Submissions are reviewed for accuracy and fit
 3. Accepted contributions are incorporated into the Field Guide
 
-No pull request required, just describe what you learned and I will handle the formatting. Whether it's a single configuration tip or a full section on a topic we haven't covered, it's welcome here.
+No pull request required, just describe what you learned and I will handle the formatting. Whether it's a single configuration tip or a full section on a topic I haven't covered, it's welcome here.
 
 ---
 
