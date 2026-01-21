@@ -442,7 +442,7 @@ For hardened multi-host architectures, see [Hardened Architecture Guide](https:/
 Validator key management is the most critical security aspect of running a validator. Understanding the key hierarchy and keeping your master key offline protects your validator identity.
 
 <p align="center">
-  <img src="../images/validator-key-hierarchy.png" alt="Validator Key Hierarchy" width="600">
+  <img src="../images/validator-key-hierarchy.png" alt="Validator Key Hierarchy" width="720">
 </p>
 
 ### Key Hierarchy
@@ -1118,7 +1118,7 @@ Almost never. The only scenario: you're on a local network with unlimited bandwi
 
 | Node Type | Recommended | Monthly Traffic | Notes |
 |-----------|-------------|-----------------|-------|
-| Validator | 21-30 | 3.5-5 TB | Enough for reliable propagation |
+| Validator | 21-30 | 3.5-5.0 TB | Enough for reliable propagation |
 | Stock node | 15-21 | 2.5-3.5 TB | Balance between connectivity and resources |
 | Private/minimal | 10-15 | 1.7-2.5 TB | Minimum viable connectivity |
 
