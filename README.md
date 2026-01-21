@@ -10,7 +10,7 @@ Operational intelligence for XRP Ledger validators and stock nodes. Compiled fro
 
 ## Ready to Get Your Hands Dirty?
 
-We recommend reading through this README to understand the commitment. But if you're the type who reads the manual after the thing's already on fire, head straight to **[The Rippled Field Guide](docs/RIPPLED-FIELD-GUIDE.md)**.
+I recommend reading through this README to understand the commitment. But if you're the type who reads the manual after the thing's already on fire, head straight to **[The Rippled Field Guide](docs/RIPPLED-FIELD-GUIDE.md)**.
 
 ---
 
