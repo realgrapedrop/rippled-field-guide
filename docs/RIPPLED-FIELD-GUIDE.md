@@ -1131,6 +1131,10 @@ Almost never. The only scenario: you're on a local network with unlimited bandwi
 
 Validators receive transactions from the network and propagate validations. They don't need 100 peers - they need *enough* peers to stay reliably connected. 21 well-connected peers is plenty.
 
+**Real-World Bandwidth**
+
+For reference, a production validator running `node_size=huge` with `peers_max=21` generates approximately 3.5 TB of network traffic per month. Plan your hosting accordingly.
+
 **Configuration**
 
 ```ini
