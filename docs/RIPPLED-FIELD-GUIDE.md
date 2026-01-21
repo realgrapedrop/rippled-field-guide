@@ -1116,11 +1116,13 @@ Almost never. The only scenario: you're on a local network with unlimited bandwi
 
 **21-30 for validators, 15-21 for stock nodes.**
 
-| Node Type | Recommended | Notes |
-|-----------|-------------|-------|
-| Validator | 21-30 | Enough for reliable propagation |
-| Stock node | 15-21 | Balance between connectivity and resources |
-| Private/minimal | 10-15 | Minimum viable connectivity |
+| Node Type | Recommended | Monthly Traffic | Notes |
+|-----------|-------------|-----------------|-------|
+| Validator | 21-30 | 3.5-5 TB | Enough for reliable propagation |
+| Stock node | 15-21 | 2.5-3.5 TB | Balance between connectivity and resources |
+| Private/minimal | 10-15 | 1.7-2.5 TB | Minimum viable connectivity |
+
+> **Note:** Traffic estimates based on production validator data running `node_size=huge` with `peers_max=21` generating approximately 3.5 TB/month. Your results may vary with network activity. Plan your hosting accordingly.
 
 **The Trade-off**
 
@@ -1130,10 +1132,6 @@ Almost never. The only scenario: you're on a local network with unlimited bandwi
 **Why Validators Don't Need Huge Counts**
 
 Validators receive transactions from the network and propagate validations. They don't need 100 peers - they need *enough* peers to stay reliably connected. 21 well-connected peers is plenty.
-
-**Real-World Bandwidth**
-
-For reference, a production validator running `node_size=huge` with `peers_max=21` generates approximately 3.5 TB of network traffic per month. Plan your hosting accordingly.
 
 **Configuration**
 
