@@ -182,7 +182,7 @@ Before installing rippled, you need the right foundation. This phase covers hard
 | x86-64 (AMD64) | Intel Core, AMD Ryzen, Xeon, EPYC | Fully supported |
 | ARM | Apple Silicon (M1/M2/M3/M4), AWS Graviton, Raspberry Pi | Development only |
 
-AMD Ryzen and Intel processors use the same x86-64 instruction set and are equally supported. ARM-based processors (including Apple Silicon) can compile rippled for development, but are **not recommended for production validators or nodes**.
+> **Note:** AMD Ryzen and Intel processors use the same x86-64 instruction set and are equally supported. ARM-based processors (including Apple Silicon) can compile rippled for development, but are **not recommended for production validators or nodes**.
 
 **Disk Performance**
 
