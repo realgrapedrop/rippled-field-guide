@@ -12,10 +12,11 @@ The Rippled Field Guide is a community effort. This page recognizes everyone who
 
 ## Acknowledgments
 
-| Contributor | Contribution | Date |
-|-------------|--------------|------|
-| [@shortthefomo](https://github.com/shortthefomo) | Identified `online_delete` I/O storm issue ([#6202](https://github.com/XRPLF/rippled/issues/6202)) | 2024 |
-| [@ximinez](https://github.com/ximinez) | Technical explanation of NuDB rotation mechanism | 2024 |
+| Contributor | Category | Contribution | Date |
+|-------------|----------|--------------|------|
+| [@shortthefomo](https://github.com/shortthefomo) | Performance | Identified `online_delete` I/O storm issue ([#6202](https://github.com/XRPLF/rippled/issues/6202)) | 2024 |
+| [@ximinez](https://github.com/ximinez) | Performance | Technical explanation of NuDB rotation mechanism | 2024 |
+| [@jgrimm5](https://x.com/jgrimm5) | Field Tested | Confirmed `online_delete` and `node_size` tuning eliminated missed ledgers | 2026 |
 
 ---
 

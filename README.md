@@ -260,6 +260,8 @@ This is a community driven project. If you run rippled as a stock node or valida
 
 No pull request required, just describe what you learned and I will handle the formatting. Whether it's a single configuration tip or a full section on a topic I haven't covered, it's welcome here.
 
+Contributors are recognized on the [Community Contributions](docs/COMMUNITY-CONTRIBUTIONS.md) page.
+
 ---
 
 ## License
