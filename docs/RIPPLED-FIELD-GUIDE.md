@@ -138,6 +138,7 @@ Some steps must happen in order. Getting this wrong causes problems:
   - [Domain Verification](#domain-verification)
   - [Fee Voting](#fee-voting)
 - [Phase 4: Installation & Configuration](#phase-4-installation--configuration)
+  - [Installation Best Practices](#installation-best-practices)
   - [Node Sizing](#node-sizing)
   - [Database Management](#database-management)
   - [Network Configuration](#network-configuration)
@@ -884,6 +885,221 @@ Rarely. Fee changes are network governance decisions. Only deviate if:
 # Phase 4: Installation & Configuration
 
 Now that you understand the infrastructure, security, and identity requirements, it's time to install and configure rippled.
+
+---
+
+## Installation Best Practices
+
+The official installation instructions at [xrpl.org](https://xrpl.org/docs/infrastructure/installation) cover the mechanics. This section covers what to verify and why.
+
+### Packages vs Building from Source
+
+**The Bottom Line**
+
+**Use the official packages.** Don't build from source unless you have a specific reason.
+
+| Method | Recommendation | Use Case |
+|--------|----------------|----------|
+| **apt/yum packages** | Recommended | Production deployments |
+| **Building from source** | Not recommended | Custom patches, development, unsupported platforms |
+
+**Why Packages Win**
+
+- Pre-built with tested compiler flags and optimizations
+- Automatic systemd service configuration
+- Proper user/group setup (rippled:rippled)
+- Logrotate configuration included
+- Easier upgrades
+- Ripple's CI/CD validates the builds
+
+Building from source introduces variables: compiler version, build flags, missing dependencies. Unless you're contributing to rippled development or running on an unsupported platform, use packages.
+
+### Service Account
+
+**The Bottom Line**
+
+**rippled runs as the `rippled` user, not root.** The official packages set this up automatically.
+
+| Component | Owner | Permissions |
+|-----------|-------|-------------|
+| `/opt/ripple/bin/rippled` | root | 755 |
+| `/etc/opt/ripple/rippled.cfg` | rippled | 600 |
+| `/var/lib/rippled/` | rippled | 750 |
+| `/var/log/rippled/` | rippled | 750 |
+
+**Why This Matters**
+
+If rippled is compromised, the attacker gains the privileges of whatever user rippled runs as. Running as `rippled` (not root) limits the blast radius. The attacker can't:
+- Modify system binaries
+- Read other users' files
+- Install rootkits
+- Pivot to other services
+
+**Verify After Install**
+
+```bash
+# Check the service runs as rippled user
+ps aux | grep rippled
+# Should show: rippled ... /opt/ripple/bin/rippled
+
+# Check config permissions
+ls -la /etc/opt/ripple/rippled.cfg
+# Should show: -rw------- rippled rippled
+```
+
+If you see root ownership on the config file, fix it:
+
+```bash
+sudo chown rippled:rippled /etc/opt/ripple/rippled.cfg
+sudo chmod 600 /etc/opt/ripple/rippled.cfg
+```
+
+### Post-Install Verification
+
+**The Bottom Line**
+
+**Verify the install before configuring.** Catch problems early.
+
+**Checklist**
+
+```bash
+# 1. Verify binary exists and runs
+/opt/ripple/bin/rippled --version
+
+# 2. Check service is enabled
+sudo systemctl is-enabled rippled
+
+# 3. Check service started
+sudo systemctl status rippled
+
+# 4. Verify config file location
+ls -la /etc/opt/ripple/rippled.cfg
+
+# 5. Check log file is being written
+ls -la /var/log/rippled/debug.log
+
+# 6. Verify rippled is listening (after startup)
+ss -tlnp | grep rippled
+```
+
+**Expected Output**
+
+| Check | Expected Result |
+|-------|-----------------|
+| `--version` | Version string (e.g., `rippled version 2.3.0`) |
+| `is-enabled` | `enabled` |
+| `status` | `active (running)` |
+| Config file | Exists, owned by rippled, mode 600 |
+| Log file | Exists and growing |
+| Listening ports | 51235 (peer), 5005 (RPC), 6006 (WS) on 127.0.0.1 |
+
+### Initial Sync
+
+**The Bottom Line**
+
+**A fresh install takes 10-20 minutes to sync.** Don't configure as a validator until sync completes.
+
+**What Happens During Sync**
+
+1. rippled connects to peers (check with `rippled peers`)
+2. Downloads recent ledger history
+3. Validates and stores ledgers locally
+4. Catches up to the network's current ledger
+
+**Server States During Sync**
+
+| State | Meaning | Action |
+|-------|---------|--------|
+| `disconnected` | No peer connections | Check firewall, network |
+| `connected` | Has peers, not syncing yet | Wait |
+| `syncing` | Downloading ledger data | Wait |
+| `tracking` | Following network, catching up | Wait |
+| `full` | Fully synced (stock node) | Ready for use |
+| `proposing` | Fully synced and validating | Validator is working |
+
+**Monitor Sync Progress**
+
+```bash
+# Watch server state
+watch -n 5 'rippled server_info | grep -E "server_state|complete_ledgers|peers"'
+```
+
+**When Is It Ready?**
+
+- `server_state` shows `full` (stock node) or `proposing` (validator)
+- `complete_ledgers` shows a range (e.g., `32570-93456789`)
+- Health check returns 200: `curl http://localhost:51235/health`
+
+**Sync Problems**
+
+| Symptom | Likely Cause |
+|---------|--------------|
+| Stuck on `disconnected` | Firewall blocking port 51235, no outbound connectivity |
+| Stuck on `connected` | Peers connected but not sharing data (rare) |
+| Very slow sync | Undersized hardware, disk I/O bottleneck |
+| `server_state` cycling | Resource exhaustion, check RAM and disk |
+
+### Stock Node First
+
+**The Bottom Line**
+
+**Run as a stock node first. Convert to validator after you've verified stable operation.**
+
+This isn't just advice for beginners. It's the recommended practice:
+
+1. **Validate your infrastructure** - hardware, network, firewall all working
+2. **Learn the operational patterns** - logs, monitoring, what normal looks like
+3. **Build confidence** - before your reputation is on the line
+
+**The Sequence**
+
+| Phase | Duration | Goal |
+|-------|----------|------|
+| Stock node | 1-4 weeks | Verify stable sync, learn operations |
+| Validator (not on UNL) | Months | Build track record, verify 99%+ agreement |
+| Apply for UNL | After 12+ months | Proven reliability |
+
+**When to Convert**
+
+Convert to validator when:
+- Stock node runs stable for at least a week
+- You've handled at least one upgrade cycle
+- Monitoring is in place and working
+- You understand the logs and what to watch for
+- You've practiced your disaster recovery procedure
+
+Don't rush. A validator that goes down hurts your reputation. A stock node that goes down affects only you.
+
+### Default Configuration
+
+**The Bottom Line**
+
+**The default config is designed for quick startup, not production.** Review and modify before exposing to the network.
+
+**What the Default Config Does**
+
+| Setting | Default | Production |
+|---------|---------|------------|
+| `node_size` | `medium` | `huge` for validators |
+| `online_delete` | `512` | `16384-32768` (prevents I/O storms) |
+| Admin ports | May bind to `0.0.0.0` | `127.0.0.1` only |
+| `peer_private` | `0` | `1` for validators |
+| `peers_max` | Higher | `21` is sufficient |
+
+**Before Starting with Your Config**
+
+1. Read through the entire default config at `/etc/opt/ripple/rippled.cfg`
+2. Understand each section's purpose
+3. Use the [XRPL Node Configurator](https://xrplf.github.io/xrpl-node-configurator/) for interactive config generation
+4. Compare against the production example in [Putting It All Together](#putting-it-all-together)
+
+**Back Up Before Modifying**
+
+```bash
+sudo cp /etc/opt/ripple/rippled.cfg /etc/opt/ripple/rippled.cfg.default
+```
+
+This gives you a reference point if you need to compare or revert.
 
 ---
 
