@@ -19,6 +19,7 @@ The Rippled Field Guide is a community effort. This page recognizes everyone who
 | [@ximinez](https://github.com/ximinez) | Performance | Technical explanation of NuDB rotation mechanism | 01/2026 |
 | [@jgrimm5](https://x.com/jgrimm5) | Field Tested | Confirmed `online_delete` and `node_size` tuning resulted in zero missed ledgers in 24 hours, which was rare before the change | 01/2026 |
 | [@realgrapedrop](https://github.com/realgrapedrop) | Best Practices | Installation best practices section covering packages vs source, service accounts, post-install verification, initial sync, and stock node first | 01/2026 |
+| [@REClosureDEX](https://x.com/REClosureDEX) | Field Tested | Confirmed `online_delete` tuning resolved validator dropping 2 ledgers hourly on a third-party configured setup | 02/2026 |
 
 ---
 
