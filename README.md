@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/the-rippled-field-guide.gif" alt="The Rippled Field Guide" width="400">
+  <img src="images/the-rippled-field-guide.gif" alt="The Rippled Field Guide" width="500">
 </p>
 
 Operational intelligence for XRP Ledger validators and stock nodes. Compiled from production experience and core developer insights. The reference guide I wish I had when I started running validators.
