@@ -1307,6 +1307,47 @@ online_delete=32768
 
 ## Network Configuration
 
+### Network Bandwidth
+
+#### What to Expect
+
+Running a validator means constant two-way traffic with the network. Bandwidth is one of the most overlooked costs when planning a validator deployment.
+
+#### Real-World Numbers
+
+A single validator running `node_size: huge` with 21 peers and compression enabled could use up to ~150 GB of network traffic in one day. This varies based on how many transactions the XRPL network is processing.
+
+#### Factors That Impact Bandwidth
+
+| Factor | What It Does | Impact |
+| ------ | ------------ | ------ |
+| `node_size` | Controls caching, connection capacity, and memory allocation | `huge` accepts more connections and handles more data. `medium` and `small` reduce traffic. |
+| `peers_max` | Number of peer connections | Each peer is a two-way stream of ledgers, transactions, and proposals. More peers = more traffic. |
+| `compression` | Compresses peer-to-peer traffic | Reduces bandwidth significantly when enabled. Should always be on. |
+| `ledger_history` / `online_delete` | How much ledger history you retain | Peers can request history from your node. More history = more potential outbound traffic. |
+| Network activity | Transaction volume on the XRPL | Busy days mean more data to relay. Outside your control. |
+| Validator role | Consensus participation | Validators exchange proposal and validation messages on top of normal peer traffic. Stock nodes don't have this overhead. |
+
+#### What You Control
+
+The three biggest levers:
+
+1. **`node_size`** - stepping down from `huge` to `medium` reduces connection capacity and caching
+2. **`peers_max`** - fewer peers means less traffic, but also less redundancy
+3. **`compression`** - always enable this, no reason not to
+
+#### What You Don't Control
+
+- Transaction volume on the network
+- How often peers request history from your node
+- Consensus message overhead (if you're a validator)
+
+#### Hosting Considerations
+
+Most VPS providers charge for bandwidth or cap it. Factor this into your monthly cost estimate. Bare metal with unmetered bandwidth is common for validators running `node_size: huge`.
+
+---
+
 ### compression
 
 **The Bottom Line**
