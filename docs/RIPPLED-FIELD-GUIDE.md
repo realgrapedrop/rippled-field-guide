@@ -786,6 +786,8 @@ Update rippled.cfg with this validator token:
 eyJ2YWxpZGF0...
 ```
 
+> **Important:** This command outputs both an attestation (for the TOML) and a **new** validator token (for rippled.cfg). If you already have a running validator, you must replace your existing token with this new one. The new token contains the domain claim in the manifest. Skipping this is the #1 reason domain verification fails on explorers.
+
 **Step 2: Create TOML File**
 
 ```toml
@@ -867,7 +869,9 @@ rippled validator_info
 
 **2. Did you update the validator token?**
 
-When you run `validator-keys set_domain`, it outputs a **new** `[validator_token]`. This is the most commonly missed step. If you already had a token in `rippled.cfg` and didn't replace it with the new one, your TOML will verify fine but the validator is broadcasting an old manifest without the domain claim.
+This is the most commonly missed step. Every time you run `validator-keys set_domain`, it outputs a **new** `[validator_token]`. You must replace the old token in `rippled.cfg` with this new one and restart rippled.
+
+This is especially easy to miss if you set up your validator first and added domain verification later. Your validator was already running with a token, so it feels like `set_domain` only affects the TOML side. It doesn't. The new token contains the domain claim in the manifest. Without it, the TOML will verify fine but your validator is still broadcasting the old manifest with no domain.
 
 Confirm the `[validator_token]` in your `rippled.cfg` matches the output from `set_domain`:
 
