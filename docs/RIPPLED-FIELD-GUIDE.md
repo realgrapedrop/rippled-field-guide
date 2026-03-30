@@ -136,6 +136,7 @@ Some steps must happen in order. Getting this wrong causes problems:
   - [Validator Keys](#validator-keys)
 - [Phase 3: Identity](#phase-3-identity)
   - [Domain Verification](#domain-verification)
+  - [Domain Verification Troubleshooting](#domain-verification-troubleshooting)
   - [Fee Voting](#fee-voting)
 - [Phase 4: Installation & Configuration](#phase-4-installation--configuration)
   - [Installation Best Practices](#installation-best-practices)
@@ -835,6 +836,90 @@ sudo systemctl restart rippled
 **Source**
 
 See [xrp-ledger.toml specification](https://xrpl.org/docs/references/xrp-ledger-toml) for complete field reference.
+
+## Domain Verification Troubleshooting
+
+Domain verification has two sides. The TOML file on your web server is one side. The validator's manifest broadcast to the network is the other. Both must match for explorers like XRPSCAN to show a verified domain. The XRPL.org Domain Verifier only checks the TOML side, so it can pass while XRPSCAN still shows unverified.
+
+Work through these checks in order.
+
+**1. Check what your validator is broadcasting**
+
+The fastest way to find the culprit is to check whether your validator's manifest includes the domain. Run:
+
+```bash
+rippled server_info | grep -i domain
+```
+
+If the domain field is populated, the network side is correct. The problem is on the TOML/web server side (skip to step 4). If the domain field is empty or missing, the validator token wasn't updated (see step 2).
+
+You can also check the debug log for manifest details around startup:
+
+```bash
+grep -i "manifest" /var/log/rippled/debug.log | tail -20
+```
+
+For a full view of what the validator is broadcasting:
+
+```bash
+rippled validator_info
+```
+
+**2. Did you update the validator token?**
+
+When you run `validator-keys set_domain`, it outputs a **new** `[validator_token]`. This is the most commonly missed step. If you already had a token in `rippled.cfg` and didn't replace it with the new one, your TOML will verify fine but the validator is broadcasting an old manifest without the domain claim.
+
+Confirm the `[validator_token]` in your `rippled.cfg` matches the output from `set_domain`:
+
+```bash
+grep -A 1 "validator_token" /etc/opt/ripple/rippled.cfg
+```
+
+If it doesn't match, update it and restart rippled:
+
+```bash
+sudo systemctl restart rippled
+```
+
+**3. Is your validator online and validating?**
+
+XRPSCAN can only verify domains for validators it can see on the network. Check that your validator is proposing:
+
+```bash
+rippled server_info | grep server_state
+```
+
+You want to see `"server_state": "proposing"`. If it says `connected` or `syncing`, the validator isn't producing validations yet.
+
+**4. Are CORS headers set?**
+
+Browser-based verification tools (like the XRPL.org TOML Checker) need CORS enabled. Check from the command line:
+
+```bash
+curl -I https://YOUR_DOMAIN/.well-known/xrp-ledger.toml
+```
+
+Look for this line in the response:
+
+```
+access-control-allow-origin: *
+```
+
+If it's missing, add it to your web server config (see Nginx/Apache examples in Common Mistakes above).
+
+**5. Is the TOML accessible over HTTPS?**
+
+Confirm the file is reachable and returns a 200 status:
+
+```bash
+curl -I https://YOUR_DOMAIN/.well-known/xrp-ledger.toml
+```
+
+If you get a redirect (301/302), SSL error, or 404, fix that first. The TOML must be served directly over HTTPS with a valid certificate.
+
+**6. Still not showing on XRPSCAN?**
+
+If everything above checks out, wait. Third-party sites like [XRPSCAN](https://xrpscan.com/validators) and [Bithomp](https://bithomp.com/en/domains) can take up to 24 hours to reflect a verified domain. The XRPL.org [Domain Verifier](https://xrpl.org/resources/dev-tools/domain-verifier) updates in real time and is the best tool for confirming your setup is correct while you wait.
 
 ---
 
