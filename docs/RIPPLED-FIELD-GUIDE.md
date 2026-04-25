@@ -142,6 +142,8 @@ Some steps must happen in order. Getting this wrong causes problems:
   - [Installation Best Practices](#installation-best-practices)
   - [Node Sizing](#node-sizing)
   - [Database Management](#database-management)
+  - [Filesystem & Storage Tuning](#filesystem--storage-tuning)
+  - [Host Memory & Swap](#host-memory--swap)
   - [Network Configuration](#network-configuration)
   - [Time Synchronization](#time-synchronization)
   - [Operational Settings](#operational-settings)
@@ -192,7 +194,10 @@ Storage speed is critical. Requirements:
 
 - **Type**: SSD or NVMe (spinning disks will not work)
 - **IOPS**: 10,000+ sustained (not burst)
-- **Capacity**: 50 GB minimum for database partition
+- **Capacity**: 50 GB minimum for the nodestore partition. Plan for growth based on your `online_delete` setting.
+- **Layout (recommended)**: Use two NVMe drives. Dedicate one to the nodestore (`/var/lib/rippled`). Put OS, swap, and logs on the other. NuDB I/O is the validator's hot path, and isolating it from everything else (including swap) is the single biggest disk-side performance win.
+- **Layout (single-disk fallback)**: A single NVMe works (cloud VMs, small bare-metal hosts). You lose I/O isolation entirely and any heavy host-level I/O can affect consensus. See [Host Memory & Swap](#host-memory--swap) for mitigations.
+- **Endurance**: NuDB writes constantly. Choose NVMe drives with strong TBW (Total Bytes Written) ratings. Avoid DRAM-less budget drives for the nodestore.
 
 **Source**
 
@@ -1391,6 +1396,244 @@ path=/var/lib/rippled/db/nudb
 advisory_delete=0
 online_delete=32768
 ```
+
+---
+
+## Filesystem & Storage Tuning
+
+**The Bottom Line**
+
+**Mount the nodestore disk with `noatime`, verify the NVMe I/O scheduler is `none` or `mq-deadline`, and confirm `fstrim.timer` is enabled.** These are one-time host setup steps that pay back forever.
+
+### Mount Options
+
+The nodestore directory reads files constantly during consensus. The default `relatime` filesystem option updates access timestamps on every read, which means an extra metadata write for every read operation. Switch to `noatime` to skip those writes entirely.
+
+In `/etc/fstab`:
+
+```
+/dev/nvme1n1p1 /var/lib/rippled ext4 defaults,noatime 0 2
+```
+
+After editing, remount without rebooting:
+
+```bash
+sudo mount -o remount /var/lib/rippled
+```
+
+Verify:
+
+```bash
+mount | grep rippled  # should show "noatime" in the options
+```
+
+### I/O Scheduler
+
+NVMe drives don't benefit from elaborate scheduling. The kernel handles parallel queues internally. Check what's set:
+
+```bash
+cat /sys/block/nvme0n1/queue/scheduler
+```
+
+The active scheduler is shown in brackets:
+
+| Active Value | Action |
+|--------------|--------|
+| `[none]` | Best for NVMe. No action needed. |
+| `[mq-deadline]` | Acceptable. Adds a tiny latency but harmless. |
+| `[bfq]` | Switch it. BFQ is desktop-tuned and adds I/O latency. |
+| `[cfq]` | Switch it. Legacy scheduler. |
+
+To change to `none`:
+
+```bash
+echo none | sudo tee /sys/block/nvme0n1/queue/scheduler
+```
+
+To make it persistent across reboots, add a udev rule at `/etc/udev/rules.d/60-nvme-scheduler.rules`:
+
+```
+ACTION=="add|change", KERNEL=="nvme[0-9]*", ATTR{queue/scheduler}="none"
+```
+
+### TRIM (NVMe Wear Management)
+
+NVMe drives need periodic TRIM to maintain write performance over time. Ubuntu enables this automatically via `fstrim.timer`. Verify:
+
+```bash
+sudo systemctl status fstrim.timer
+```
+
+You want `Active: active (waiting)` and a recent or upcoming trigger. If it's not enabled:
+
+```bash
+sudo systemctl enable --now fstrim.timer
+```
+
+The default weekly schedule is fine for a validator.
+
+### Migrating the Nodestore to a New Disk
+
+If you add a second NVMe to an existing host, the migration is straightforward. Plan for a maintenance window. Your validator will miss ledgers while data copies.
+
+1. Install the new NVMe. Partition it (a single ext4 partition works fine) and format with `noatime`.
+2. Stop rippled cleanly. Allow the full grace period (30-90 seconds) for clean shutdown.
+3. Copy the nodestore: `rsync -aHAX /var/lib/rippled/ /mnt/new-disk/`.
+4. Update `/etc/fstab` so the new disk mounts at `/var/lib/rippled`.
+5. Verify the mount with `mount | grep rippled`.
+6. Start rippled. No config change is needed if the mount point is the same.
+7. Once `proposing` is stable, reclaim space on the old disk.
+
+Total downtime is dominated by the rsync. For a 200-400 GB nodestore on Gen4 NVMe, expect 30-90 minutes.
+
+---
+
+## Host Memory & Swap
+
+**The Bottom Line**
+
+**Keep swap usage near zero.** A validator with adequate RAM should never rely on swap. Set `vm.swappiness=1`, put the swap file on a different physical device than the nodestore, and treat any sustained swap usage as a signal to investigate, not normal behavior.
+
+**Why Swap Hurts Validators**
+
+NuDB serves consensus rounds through memory-mapped reads. If the kernel pages those mappings to disk, the next read pulls them back at disk speed (milliseconds instead of nanoseconds). Even one slow round can cause your validator to miss a ledger.
+
+The dangerous pattern is not high swap usage by itself. It's **I/O contention** between swap traffic and NuDB traffic on the same physical device.
+
+### vm.swappiness
+
+The kernel's `vm.swappiness` controls how aggressively pages get pushed to swap when memory pressure rises. The default (60) is tuned for desktops, not databases.
+
+| Value | When to Use |
+|-------|-------------|
+| 60 (default) | Don't use this on a validator |
+| 10 | Acceptable for general server workloads |
+| **1** | **Recommended for validators (database-class workload)** |
+| 0 | Avoid. Disables some cgroup-aware reclaim paths in modern kernels and can trigger premature OOM kills. |
+
+**Configuration:**
+
+```bash
+echo "vm.swappiness=1" | sudo tee /etc/sysctl.d/99-rippled.conf
+sudo sysctl -p /etc/sysctl.d/99-rippled.conf
+```
+
+Verify:
+
+```bash
+cat /proc/sys/vm/swappiness  # should print 1
+```
+
+### Storage Layout
+
+**Ideal:** two NVMe drives. Dedicate one to the nodestore. Put OS, swap, and logs on the other.
+
+| Workload | Where to Put It |
+|----------|-----------------|
+| `/var/lib/rippled` (NuDB) | Dedicated NVMe, nothing else on it |
+| Swap file or partition | OS disk |
+| Logs | OS disk |
+
+**Single-disk fallback:** Many operators run on a single NVMe (cloud VMs, small bare-metal). It works, but you lose I/O isolation entirely. The mitigations below get you most of the way there:
+
+1. **Pin rippled in RAM** so swap doesn't accumulate. See [Container Considerations](#container-considerations-docker) below.
+2. **Throttle host-level swap operations** with `ionice -c 3 sudo swapoff -a` so they don't preempt NuDB.
+3. **Schedule any heavy I/O** (swap flushes, backups, log compaction) for known-quiet ledger periods.
+
+A single-disk host with these mitigations runs fine. It just won't tolerate sudden I/O bursts as gracefully as a two-disk host. See [The Swapoff Gotcha](#the-swapoff-gotcha) below for what can go wrong if you ignore this.
+
+### Swap Sizing
+
+Bigger swap is not better. It just gives the kernel more rope to hang you with under bursty load.
+
+| Host RAM | Recommended Swap |
+|----------|------------------|
+| 16-32 GB | 4-8 GB |
+| 32-64 GB | 4 GB |
+| 64+ GB | 2-4 GB |
+
+The cost of "swap was too small to absorb a spike" is an OOM kill (loud, recoverable). The cost of "swap absorbed the spike but rippled was paged out" is silently missing ledgers (quiet, costly to reputation). The first failure is the one you want.
+
+### Stale Swap vs Active Swap
+
+Two very different conditions look the same in `free -h`:
+
+| Condition | Symptom | What's Happening | What to Do |
+|-----------|---------|------------------|------------|
+| **Stale swap** | High swap used, low `SwapCached`, `vmstat` shows `si`/`so` near 0 | Pages got swapped during a past memory spike. RAM is free now, but the kernel doesn't pull them back until something accesses them. | Flush during a maintenance window (see below). |
+| **Active swap** | High swap used, `vmstat` shows non-zero `si`/`so` sustained | Memory pressure right now. Pages are moving in and out continuously. | Find the process. Add RAM, raise the container limit, or stop the offender. |
+
+**Diagnostic commands:**
+
+```bash
+# Snapshot
+free -h
+grep -E 'MemTotal|MemAvailable|SwapTotal|SwapFree|SwapCached' /proc/meminfo
+
+# Check for active I/O (5 samples, 2 seconds apart)
+vmstat 2 5
+
+# Identify swap consumers (top 20)
+for pid in $(ls /proc | grep -E '^[0-9]+$'); do
+  awk -v p=$pid '/VmSwap/ && $2+0>0 {print $2, p}' /proc/$pid/status 2>/dev/null
+done | sort -n | tail -20
+```
+
+If `si`/`so` are near zero, it's stale. If they're sustained above 100, it's active.
+
+### The Swapoff Gotcha
+
+`swapoff -a` is the standard way to flush stale swap pages back to RAM. It's safe from a memory standpoint as long as `MemAvailable` exceeds the amount currently swapped. **It is not safe from an I/O standpoint if your swap file shares a disk with your nodestore.**
+
+The reason: `swapoff -a` reads every swapped page back into RAM in a single tight loop. For 10 GB of swap on a typical NVMe, that's 30-60 seconds of saturating sequential reads. If NuDB is on the same disk, your validator competes for I/O during that window and may miss ledgers.
+
+> **Real example:** Flushing 11.5 GiB of stale swap on a single-disk validator caused two missed consensus rounds and turned one ledger close into a 14-second event. The validator process did not restart, healthcheck stayed green, peer count was unaffected. It just lagged on consensus participation for the duration of the flush.
+
+**Safer ways to flush:**
+
+| Approach | When to Use |
+|----------|-------------|
+| Maintenance window | Best option. Schedule it, accept the missed ledgers. |
+| `ionice -c 3 sudo swapoff -a` | Idle I/O priority. Slower but doesn't preempt rippled. |
+| Separate disk for swap | Permanent fix. No contention possible. |
+
+Don't flush right before a ledger close. If you don't know your network's quiet periods, don't flush at all without a maintenance window.
+
+### Container Considerations (Docker)
+
+If you run rippled in Docker on a host using cgroup v2 (Ubuntu 22.04+, most modern distros), Docker's `memswap_limit` does not reliably set the container's `memory.swap.max`. Setting `memswap_limit` equal to `mem_limit` does **not** prevent the container from swapping the way it does on cgroup v1.
+
+**Verify whether your container is swapping:**
+
+```bash
+docker exec <container> cat /sys/fs/cgroup/memory.swap.current
+```
+
+A nonzero value means rippled has pages in swap.
+
+**To pin rippled in RAM, add this to your `docker-compose.yml`:**
+
+```yaml
+services:
+  rippled:
+    mem_swappiness: 0
+```
+
+Or set the cgroup directly at runtime (lost on container restart):
+
+```bash
+echo 0 | sudo tee /sys/fs/cgroup/system.slice/docker-<container_id>.scope/memory.swap.max
+```
+
+### Don't Confuse Swap Tuning with Memory Sizing
+
+Swap tuning is not a substitute for adequate RAM. If you find yourself raising swap size, lowering swappiness aggressively, or flushing swap regularly, the answer is more RAM or a smaller `node_size`, not more swap. See [Node Sizing](#node-sizing) for the RAM-to-node_size mapping.
+
+**Source**
+
+- [Linux kernel sysctl/vm documentation](https://www.kernel.org/doc/Documentation/sysctl/vm.txt)
+- [Docker Compose memory configuration](https://docs.docker.com/reference/compose-file/services/#mem_swappiness)
+- Database-class swap recommendations are consistent across [PostgreSQL](https://www.postgresql.org/docs/current/kernel-resources.html), MySQL, and RocksDB tuning guides (all converge on `vm.swappiness=1`).
 
 ---
 

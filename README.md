@@ -210,7 +210,9 @@ This is why you came here. While the official [Running an XRP Ledger Validator](
 - **Hardware Requirements** - CPU, RAM, storage, bare metal vs cloud
 - **Node Sizing** - `node_size` parameter and RAM allocation
 - **Database Management** - `online_delete` tuning, I/O storm prevention
-- **Network Configuration** - compression, peer limits
+- **Filesystem & Storage Tuning** - mount options, NVMe I/O scheduler, TRIM, nodestore migration
+- **Host Memory & Swap** - swappiness, storage layout, stale vs active swap, swapoff gotchas
+- **Network Configuration** - compression, peer limits, bandwidth expectations
 - **Port Configuration & Security** - port types, `ip` vs `admin`, firewall rules
 - **Time Synchronization** - SNTP server configuration
 - **Operational Settings** - logging, SSL verification
