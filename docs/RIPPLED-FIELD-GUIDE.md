@@ -2211,6 +2211,79 @@ curl http://localhost:51235/health
 rippled server_info | grep amendment_blocked
 ```
 
+### Understanding load_factor
+
+`load_factor` is one of the most-watched and most-misread fields in `server_info`. Operators new to rippled often assume any value above 1 means something is wrong. It doesn't.
+
+**What it is**
+
+`load_factor` is rippled's internal busyness multiplier, normalized so a fully-idle server reads `1.0`. It's the input to the network's fee market — when transaction volume rises, rippled raises `load_factor` and the open-ledger fee scales with it, throttling spam and prioritizing willing-to-pay transactions. The mechanism *requires* `load_factor` to react quickly to short bursts of activity, so the metric is sensitive by design.
+
+A spike to 30 or 40 for a few seconds is not a problem. The XRPL network is bursty — NFT mints, payment surges, exchange sweeps all cause load to climb briefly across every validator simultaneously, then settle. Treating brief spikes as alerts produces false positives and alert fatigue. Sustained periods (minutes, not seconds) above baseline are the actionable signal.
+
+**Reading the number**
+
+| Range | Interpretation |
+|---|---|
+| 1 – 5 | Quiet to lightly busy. Normal for most of the day. |
+| 5 – 30 | The network is processing real volume. NFT drop, payment surge, exchange activity. Common; lasts a few minutes; settles on its own. |
+| 30 – 64 | Sustained busy. If it lasts more than a couple of minutes, something real is happening — could be a network event, could be your host slowing down. |
+| 64 – 100 | Real fee pressure. Fees are climbing, the queue is filling. |
+| 100+ | rippled has entered fee escalation. It's actively rejecting RPCs and charging much higher fees. The "I am genuinely overwhelmed" signal. |
+
+**Local vs network — the distinction that matters most**
+
+`load_factor` is the maximum of three components:
+
+```
+load_factor = max(load_factor_local, load_factor_net, load_factor_fee_escalation)
+```
+
+- **`load_factor_local`** — *your host* is the bottleneck. CPU pinned, disk slow, memory pressured. Actionable: investigate local resources.
+- **`load_factor_net`** — *the network* is busy. Every validator is seeing the same number. Not actionable from this host — wait for it to pass.
+- **`load_factor_fee_escalation`** — open-ledger fee market is bidding the cost up. Often a side effect of network-wide congestion.
+
+Knowing which component is driving a high `load_factor` tells you whether to act or wait. Older rippled versions exposed all three sub-fields directly in `server_info`. **Modern rippled (3.x) only returns the combined `load_factor` and the rich `load.job_types` block** — the sub-fields are gone. You have to use indirect signals to differentiate.
+
+**The 3.x diagnostic — local-resource indicators**
+
+When `load_factor` is high, check these fields in `server_info` to determine whether *your host* is the cause:
+
+```bash
+rippled server_info | jq '.result.info | {
+  load_factor,
+  io_latency_ms,
+  peer_disconnects_resources,
+  jq_trans_overflow,
+  server_state,
+  last_close,
+  load
+}'
+```
+
+| Field | Local-cause signal |
+|---|---|
+| `io_latency_ms` | `> 5` means disk is the bottleneck |
+| `peer_disconnects_resources` | Rising means the host is shedding peers because it can't keep up |
+| `jq_trans_overflow` | `> 0` or rising means the job queue is overflowing — rippled is dropping transactions it can't process in time |
+| `load.job_types[].peak_time` | `> 10s` on `advanceLedger`, `trustedValidation`, or `transaction` indicates pipeline lag inside rippled |
+
+If all four indicators are clean during a `load_factor` spike, the load is network-driven and there is nothing local to tune. If any are moving, the host is constrained — usually disk, CPU, or RAM — and the fix is more host, not config tweaks.
+
+**The auto-tune trap**
+
+A common operator instinct when `load_factor` rises is to start manually tuning `[node_db]` parameters: `cache`, `cache_age`, or sections like `[io_threads]` and `[network_threads]`. This is almost always wrong on modern rippled:
+
+- `cache` and `cache_age` inside `[node_db]` are auto-tuned by `node_size`. Manually setting them on a `huge`-sized validator is more likely to under-tune than help.
+- `[io_threads]` and `[network_threads]` as top-level config sections are not valid rippled keys. rippled will ignore them or warn at startup.
+- Thread-pool sizing for I/O and networking is handled internally based on `node_size` and detected core count.
+
+If `load_factor_local` is consistently the cause of high readings, the lever is `node_size` — see [Node Sizing](#node-sizing). The progression is `small → medium → large → huge`. If you're already at `huge`, the answer is more host (more cores, more RAM, faster NVMe), not config tweaks.
+
+**Brief spikes are normal — alert on sustained windows**
+
+Whatever monitoring stack you build, calibrate the duration filter against your validator's actual behavior, not against the threshold value alone. A reasonable starting point is "alert when `load_factor` stays above N for at least 3 minutes" rather than "alert any time `load_factor` exceeds N." Empirical tuning — pull a week of data, look at how often spikes sustain — beats prescriptive thresholds every time.
+
 ---
 
 ## Maintenance
