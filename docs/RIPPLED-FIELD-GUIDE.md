@@ -137,6 +137,7 @@ Some steps must happen in order. Getting this wrong causes problems:
 - [Phase 3: Identity](#phase-3-identity)
   - [Domain Verification](#domain-verification)
   - [Domain Verification Troubleshooting](#domain-verification-troubleshooting)
+  - [Why Your Validator 404s on XRPSCAN](#why-your-validator-404s-on-xrpscan)
   - [Fee Voting](#fee-voting)
 - [Phase 4: Installation & Configuration](#phase-4-installation--configuration)
   - [Installation Best Practices](#installation-best-practices)
@@ -246,8 +247,8 @@ rippled uses four types of ports, each serving a different purpose:
 
 | Port | Default | Protocol | Purpose |
 |------|---------|----------|---------|
-| **Peer** | 51235 | peer | Node-to-node communication. The only port that should be publicly accessible. |
-| **RPC Admin** | 5005 | http | Administrative JSON-RPC API. Privileged commands like `stop`, `validation_seed`. |
+| **Peer** | 51235 | peer | Node-to-node communication. The only port a public-peering node exposes to the internet. A private validator keeps even this unpublished. |
+| **RPC Admin** | 5005 | http | Administrative JSON-RPC API. Privileged commands like `stop`, `sign`, `submit`. |
 | **WebSocket Admin** | 6006 | ws | Administrative WebSocket API. Same privileged access as RPC. |
 | **WebSocket Public** | 5006 | ws | Public WebSocket API for clients. Subscribe to streams, submit transactions. |
 
@@ -257,7 +258,9 @@ rippled uses four types of ports, each serving a different purpose:
 
 **The Bottom Line**
 
-**Only port 51235 (peer) should be exposed to the internet.** Admin ports must be restricted to trusted IPs. Public WebSocket is optional and should be disabled on validators unless you have a specific need.
+**On a public-peering node, only port 51235 (peer) should be exposed to the internet.** Admin ports must be restricted to trusted IPs. Public WebSocket is optional and should be disabled on validators unless you have a specific need.
+
+> A private validator behind stock-node proxies exposes **no** ports to the internet at all — not even the peer port. See [Private validator behind stock proxies](#private-validator-behind-stock-proxies) below.
 
 ### Understanding ip vs admin
 
@@ -279,7 +282,7 @@ admin = 0.0.0.0
 protocol = http
 ```
 
-With `admin = 0.0.0.0`, anyone who can reach port 5005 can run `stop`, dump your validator keys, or worse.
+With `admin = 0.0.0.0`, anyone who can reach port 5005 has full administrative control of your server. They can `stop` the node (instant downtime, missed validations, reputation damage), `sign` and `submit` arbitrary transactions through it, `connect` and `disconnect` peers to manipulate which nodes you see, change your `log_level`, and read privileged server state. There is no admin command that exfiltrates your validation master seed — that lives only in your config file and your offline keys, never on the wire — but the operational damage from open admin access is catastrophic on its own. Never expose an admin port to the internet.
 
 **The Safe Patterns**
 
@@ -298,10 +301,10 @@ Only local processes can connect. Use this if monitoring runs on the same machin
 [port_rpc_admin_local]
 port = 5005
 ip = 0.0.0.0
-admin = 127.0.0.1, 172.17.0.0/16, 172.18.0.0/16
+admin = 127.0.0.1, 172.16.0.0/12
 protocol = http
 ```
-Binds to all interfaces but restricts admin commands to localhost and Docker bridge networks. Use this when monitoring runs in Docker containers on the same host.
+Binds to all interfaces but restricts admin commands to localhost and the Docker private address range. `172.16.0.0/12` covers *every* default Docker bridge — the default bridge on 172.17.x and user-defined or Compose bridges on 172.18.x, 172.19.x, 172.20.x, and up — so admin reads keep working no matter which subnet Docker assigns your monitoring container. A narrower list like `172.17.0.0/16, 172.18.0.0/16` silently rejects a container that lands on a higher subnet. Use this when monitoring runs in Docker containers on the same host.
 
 **Pattern 3: Hardened multi-host**
 ```ini
@@ -332,9 +335,47 @@ Higher values tolerate slower clients but use more memory per connection.
 
 ### Security Patterns
 
-**Validator Configuration (recommended)**
+**Validator Configuration (recommended): private validator behind stock nodes**
 
-Validators should minimize attack surface. Disable public WebSocket unless needed:
+This is the configuration the sentry architecture diagram above describes. The validator peers *only* through stock nodes you run, and its own peer port is never published, so no external peer can dial it directly. `[peer_private] 1` restricts the validator to the addresses in `[ips_fixed]`, and `[ips_fixed]` points at your two stock nodes on their **host** peer port 51235:
+
+```ini
+[peer_private]
+1
+
+[ips_fixed]
+<stock-node-1-ip> 51235
+<stock-node-2-ip> 51235
+
+[port_rpc_admin_local]
+port = 5005
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = http
+
+[port_ws_admin_local]
+port = 6006
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = ws
+send_queue_limit = 100
+
+[port_peer]
+port = 51235
+ip = 0.0.0.0
+protocol = peer
+# Private validator: this port is NOT port-forwarded and NOT allowed
+# inbound at the firewall. rippled still needs the stanza to make
+# OUTBOUND connections to [ips_fixed]; nothing dials in.
+```
+
+No public WebSocket, admin only on localhost, peer port unpublished. See [Private validator behind stock proxies](#private-validator-behind-stock-proxies) below for the full end-to-end procedure — including the reachability-first sequence and the Docker port mapping.
+
+> **`[peer_private] 1` fails CLOSED.** With private peering on, the validator connects *only* to `[ips_fixed]` and has no fallback. If those addresses are unreachable it drops to **0 peers** and stops validating. Bring your stock nodes up with reachable peer ports and confirm them from off-box *first*, then switch the validator to private — never the other way around.
+
+**Public-peering validator (no stock nodes of your own)**
+
+If you are not running your own stock nodes, the validator peers directly with the public network, so its peer port must be reachable:
 
 ```ini
 [port_rpc_admin_local]
@@ -356,7 +397,7 @@ ip = 0.0.0.0
 protocol = peer
 ```
 
-No public WebSocket. Admin only on localhost. Only peer port exposed.
+Admin only on localhost, no public WebSocket, peer port exposed (51235 open inbound). This is a valid validator setup, but it advertises your validator's IP to the network. Prefer the private-validator pattern above wherever you can run your own stock nodes.
 
 **Stock Node with Public API**
 
@@ -396,13 +437,13 @@ When monitoring tools (like [XRPL Validator Dashboard](https://github.com/realgr
 [port_rpc_admin_local]
 port = 5005
 ip = 0.0.0.0
-admin = 127.0.0.1, 172.17.0.0/16, 172.20.0.0/16
+admin = 127.0.0.1, 172.16.0.0/12
 protocol = http
 
 [port_ws_admin_local]
 port = 6006
 ip = 0.0.0.0
-admin = 127.0.0.1, 172.17.0.0/16, 172.20.0.0/16
+admin = 127.0.0.1, 172.16.0.0/12
 protocol = ws
 send_queue_limit = 100
 
@@ -412,7 +453,126 @@ ip = 0.0.0.0
 protocol = peer
 ```
 
-The `172.x.x.x` ranges cover Docker's default bridge networks. Adjust if you use custom Docker networks.
+`172.16.0.0/12` covers the entire Docker-default private range — the default bridge on 172.17.x and every user-defined or Compose bridge above it — so admin reads from your monitoring container are accepted whichever subnet Docker assigns it. Do not narrow this to a single `/16`; a container that lands on a higher bridge would be silently rejected.
+
+> **Docker peer-port trap.** Publish admin ports to loopback only (`-p 127.0.0.1:5005:5005 -p 127.0.0.1:6006:6006`). For the peer port, check which port your *image* actually listens on before mapping it. The `xrpllabsofficial/xrpld` image listens for peers on **2459** inside the container, not 51235 — so `-p 51235:51235` gets **zero inbound peers, silently**. The correct mapping keeps the host port at 51235 and targets the container's real peer port: `-p 51235:2459`. See [Private validator behind stock proxies](#private-validator-behind-stock-proxies) for the full detail.
+
+### Private validator behind stock proxies
+
+The strongest way to run a validator is to keep it off the public peer network entirely: it peers *only* through two stock nodes you operate, and its own peer port is never published. This is the topology in the sentry architecture diagram at the top of this section — the validator reaches mainnet only by relaying through your stock nodes, and no external peer can dial the validator directly. The procedure below is native-first, with the Docker variant beside each step.
+
+**Topology**
+
+- Two **stock nodes** peer publicly on 51235 and sit between your validator and the network.
+- One **validator** runs with `[peer_private] 1` and `[ips_fixed]` pointing at those two stock nodes. It makes outbound connections to them and to nothing else. Its peer port is not port-forwarded and not opened at the firewall.
+- Monitoring reads each node's admin port over loopback only.
+
+**Step 1 — Bring the stock nodes up first, and confirm reachability from off-box**
+
+This ordering is load-bearing. `[peer_private] 1` fails **closed**: with private peering on, the validator connects only to `[ips_fixed]` and has no fallback. If those addresses are unreachable when you switch it to private, it drops to **0 peers** and stops validating. So the stock nodes must be up, synced, and reachable on their peer port *before* the validator goes private — never the reverse.
+
+Confirm each stock node is synced.
+
+Native:
+
+```bash
+rippled server_info | grep -E "server_state|complete_ledgers"
+```
+
+Docker (replace `<container>` with your container name — run `docker ps` if unsure):
+
+```bash
+docker exec <container> rippled server_info | grep -E "server_state|complete_ledgers"
+```
+
+You want `server_state: full` and a non-empty `complete_ledgers` range. Then confirm the peer port answers **from another machine** — not from the node itself, since a local check passes even when inbound is firewalled off:
+
+```bash
+nc -vz <stock-node-1-ip> 51235
+nc -vz <stock-node-2-ip> 51235
+```
+
+Both must connect before you continue.
+
+**Step 2 — Configure the validator for private peering**
+
+On the validator, add private peering pointed at your two stock nodes and keep admin on loopback. `[ips_fixed]` uses each stock node's **host** peer port 51235:
+
+```ini
+[peer_private]
+1
+
+[ips_fixed]
+<stock-node-1-ip> 51235
+<stock-node-2-ip> 51235
+
+[port_rpc_admin_local]
+port = 5005
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = http
+
+[port_ws_admin_local]
+port = 6006
+ip = 127.0.0.1
+admin = 127.0.0.1
+protocol = ws
+send_queue_limit = 100
+
+[port_peer]
+port = 51235
+ip = 0.0.0.0
+protocol = peer
+# Not port-forwarded, not allowed inbound at the firewall.
+# rippled needs this stanza to peer OUTBOUND to [ips_fixed]; nothing dials in.
+```
+
+Leave the validator's peer port out of your firewall's inbound allow-list — on a native install, that means *not* running `ufw allow 51235/tcp` on the validator (you run that on the stock nodes instead). Restart to apply:
+
+```bash
+sudo systemctl restart rippled
+```
+
+**Step 3 — Docker variant: mind the container's real peer port**
+
+If the validator or stock nodes run in Docker, the peer-port mapping has a trap that fails silently.
+
+- **Admin ports publish to loopback only:** `-p 127.0.0.1:5005:5005 -p 127.0.0.1:6006:6006`. The dashboard reaches rippled over the Docker gateway, which falls inside the `172.16.0.0/12` admin range, so admin reads are accepted without exposing the ports publicly.
+- **On the validator, publish no peer port at all.** Omit any `-p …:2459` / `-p …:51235` mapping so nothing external can dial in. Private peering is outbound-only.
+- **On the stock nodes, map the host peer port to the container's real peer port.** The `xrpllabsofficial/xrpld` image listens for peers on **2459** inside the container, not 51235. Mapping `-p 51235:51235` gets **zero inbound peers, silently** — the node runs and syncs outbound while accepting no peer connections. The correct mapping keeps the host at 51235 and targets 2459:
+
+```bash
+# stock node (public peer port + loopback-only admin)
+docker run ... -p 51235:2459 -p 127.0.0.1:5005:5005 -p 127.0.0.1:6006:6006 ...
+```
+
+Do not assume 2459 for a different image or version — verify your image's effective `[port_peer]` before mapping, then map to whatever it is. Whatever the container listens on, the **host** side stays 51235, and `[ips_fixed]` on the validator always uses the host port **51235**, never 2459.
+
+**Step 4 — Verify the topology**
+
+The proof is in the validator's peer list: it must be *exactly* your two stock nodes and nothing else.
+
+Native:
+
+```bash
+rippled peers
+rippled server_info | grep server_state
+```
+
+Docker:
+
+```bash
+docker exec <container> rippled peers
+docker exec <container> rippled server_info | grep server_state
+```
+
+You should see:
+
+- **Exactly two peers** on the validator — your two stock nodes, no others.
+- `server_state: proposing` on the validator (it is validating).
+- A **low peer count on the validator (2)** against a **higher count on each stock node** — a stock node peering with the public network typically shows roughly a dozen. That gap is the signature of a correctly isolated validator: it reaches the network only through your proxies.
+
+If the validator shows 0 peers, its `[ips_fixed]` targets are unreachable — re-check Step 1 (the peer port answering from off-box) before anything else. That is the fails-closed behavior, not a validator fault.
 
 ### Firewall Rules
 
@@ -437,6 +597,8 @@ sudo ufw allow from 10.0.0.20 to any port 6006
 | 5005 (RPC admin) | **Never** | If needed | Yes |
 | 6006 (WS admin) | **Never** | If needed | Yes |
 | 5006 (WS public) | Optional | Optional | Yes |
+
+> The peer-port row assumes a public-peering node. A [private validator behind stock proxies](#private-validator-behind-stock-proxies) exposes no ports to the public internet — its peer port stays unpublished and it peers outbound only.
 
 **Source**
 
@@ -928,7 +1090,132 @@ If you get a redirect (301/302), SSL error, or 404, fix that first. The TOML mus
 
 **6. Still not showing on XRPSCAN?**
 
-If everything above checks out, wait. Third-party sites like [XRPSCAN](https://xrpscan.com/validators) and [Bithomp](https://bithomp.com/en/domains) can take up to 24 hours to reflect a verified domain. The XRPL.org [Domain Verifier](https://xrpl.org/resources/dev-tools/domain-verifier) updates in real time and is the best tool for confirming your setup is correct while you wait.
+First, be precise about *what* is wrong, because the two failures have different causes:
+
+- Your validator **appears** on XRPSCAN but the domain shows as unverified, blank, or stale. This is a verification lag. If everything above checks out, wait. Third-party sites like [XRPSCAN](https://xrpscan.com/validators) and [Bithomp](https://bithomp.com/en/domains) can take up to 24 hours to reflect a verified domain. The XRPL.org [Domain Verifier](https://xrpl.org/resources/dev-tools/domain-verifier) updates in real time and is the best tool for confirming your setup is correct while you wait.
+- Your validator's page **404s entirely** — XRPSCAN has no record of your master key at all. This is not a verification problem and waiting will not fix it. It means your manifest never reached the explorer. See the next section.
+
+---
+
+## Why Your Validator 404s on XRPSCAN
+
+A 404 and an "unverified domain" look similar in a browser but are completely different failures. Getting them mixed up wastes days, because the fix for one does nothing for the other.
+
+- **Unverified** means XRPSCAN *found* your validator but hasn't confirmed the domain link. It has a page for your master key; the domain field is just empty or pending. This is the case the [troubleshooting section above](#domain-verification-troubleshooting) covers.
+- **404 (Not Found)** means XRPSCAN has *never seen* your validator. There is no page for your master key because no record of it ever arrived. Domain verification cannot clear a 404 — you cannot verify the domain of a validator the explorer doesn't know exists. Discovery has to happen first, and discovery is the part that is currently broken for validators outside the default UNL.
+
+### How XRPSCAN actually finds a validator
+
+XRPSCAN does not have a "submit your validator" button, and it does not have a form or API where you paste a manifest. Its ingestion service (Hermes) discovers validators **passively**, by connecting to the peer-to-peer network as a listening node and collecting the messages your validator emits:
+
+- **Validation messages**, which are signed by your validator's short-lived **ephemeral** signing key.
+- **Manifests**, the signed record that binds that ephemeral key to your permanent **master** key (`nH...`) and carries your `domain` claim.
+
+The explorer keys everything off your master key. Validations alone only carry the ephemeral key — it's the *manifest* that tells the explorer "this ephemeral key belongs to master key `nH...`." **If your manifest never reaches the explorer, there is nothing to attribute your validations to, so the master-key page simply doesn't exist — a 404.** Your validator can be validating perfectly, in `proposing` state, agreeing 100% of the time, and still 404, because none of that data is labelled with your master key until the manifest arrives.
+
+> **The registry is read-only.** XRPSCAN's public validator registry API is a `GET` endpoint. There is no submission endpoint, and no "Submit Manifest" or "Update Validator" form anywhere on the site. Any guide that tells you to paste your base64 manifest into XRPSCAN to clear a 404 is describing a feature that does not exist. Don't waste time looking for it.
+
+### The root cause: manifest gossip is gated for non-UNL validators
+
+Your manifest reaches the explorer the same way everything else does on XRPL — by **gossip**. Your validator hands its manifest to the peers it's connected to, those peers relay it onward, and eventually a copy lands on a node that an explorer's crawler is listening to.
+
+That relay step is where non-UNL validators currently break.
+
+To understand why, it helps to follow how manifest handling changed across three releases. This is a network-behaviour and rippled-version story — it is identical whether you run rippled natively or in Docker; the only thing that differs is which version your build is on.
+
+**3.2.0 — the baseline (before the flood).** This is the release most of the network was running when the flood hit. It placed **no caps** on manifests signed by untrusted keys: any node accepted them, cached them, and relayed them onward freely. That open relaying is exactly what let a non-UNL validator get discovered in the first place — and exactly what the flood abused. Nothing about 3.2.0 is wrong for your validator; it is simply the "before" state. A validator that XRPScan already lists from this era was discovered while untrusted manifests still gossiped normally.
+
+**3.2.1 — the emergency hotfix (2026-08-01).** On 2026-07-31 the network saw a **manifest flood**: a burst of manifests signed by unknown validator keys, aimed at exhausting peer memory, CPU, and disk. The response shipped within a day and added four caps on how a node handles manifests from **untrusted** keys (any key not on the receiving node's UNL):
+
+- Reject an oversized manifest before a node even finishes decoding it.
+- Limit how many untrusted manifests may ride inside a single network message.
+- A per-node cache cap on how many untrusted master keys are kept at once (`kMaxUntrustedCount`, **100** in 3.2.1) — once full, further unknown keys are rejected and no longer written to disk.
+- Cap the **outbound sharing** of untrusted manifests — the relay gate that forwards freely for keys a peer already trusts or already knows, but throttles keys it does not.
+
+Those caps did their job against the flood, but they caught legitimate non-UNL validators as collateral. Two effects matter, and the second is the load-bearing one:
+
+1. A brand-new unlisted master key can be **rejected once the cache cap is full** (the node has no room to remember you).
+2. The **outbound-relay gate** means an unlisted manifest is **accepted by the first peer but not shared onward** — it dies at the first hop and never propagates to a node an explorer is crawling.
+
+This is tracked upstream as [rippled issue #7926, "3.2.1 manifest gossip broken for non-UNL validators"](https://github.com/XRPLF/rippled/issues/7926) (opened 2026-08-02).
+
+**3.3.0 — relieves the pressure, but is not a full fix.** The next release raised the cache cap (**100 → 300**) and made it configurable, and corrected the per-message size limit. That genuinely helps effect (1): with a larger, tunable cache, a legitimate non-UNL key is far less likely to be dropped for want of room. **But 3.3.0 did not remove the outbound-relay gate** — the cap on *passing untrusted manifests along*. So effect (2) is unchanged: even on 3.3.0 your manifest still is not relayed past the peers that already know it, an explorer's crawler still never receives it, and the page still 404s.
+
+That is precisely why upgrading to 3.3.0 — which is otherwise worth doing — does **not** clear the 404 on its own: it fixed the "not enough room to remember you" half and left the "won't pass you along" half in place. A full fix requires an upstream release that changes the relay gate itself for accepted-but-untrusted keys, **and** enough of the network upgrading to that release for your manifest to actually travel. Both are out of your hands.
+
+### Confirm it's this, and not something on your end
+
+Before blaming the network, prove your own side is correct. Two things must be true.
+
+**1. Your manifest claims your domain.** Check what your validator is broadcasting.
+
+Native:
+
+```bash
+rippled server_info | grep -i domain
+```
+
+Docker (replace `<container>` with your container name — run `docker ps` if unsure):
+
+```bash
+docker exec <container> rippled server_info | grep -i domain
+```
+
+You can also inspect the raw manifest directly and confirm the domain string is embedded in it. Replace `<master_public_key>` with your validator's master public key (it begins with `nH`).
+
+Native:
+
+```bash
+rippled manifest <master_public_key>
+```
+
+Docker:
+
+```bash
+docker exec <container> rippled manifest <master_public_key>
+```
+
+If the domain is present, your `[validator_token]` is correct and the manifest is well-formed. (If it's missing, this is the token-update mistake from the [troubleshooting section](#domain-verification-troubleshooting), not the relay bug — fix that first.)
+
+**2. Your `xrp-ledger.toml` is served and lists your key.** This is the other half of the two-way binding:
+
+```bash
+curl -sI https://YOUR_DOMAIN/.well-known/xrp-ledger.toml
+```
+
+You want a `200`, `content-type` of `application/toml` (or `text/plain`), and an `access-control-allow-origin: *` header. Then confirm the body carries your master key:
+
+```bash
+curl -s https://YOUR_DOMAIN/.well-known/xrp-ledger.toml | grep -i public_key
+```
+
+If both checks pass, your setup is complete and correct. A persistent 404 is then **not your fault** — it's the relay behavior described above. There is nothing left to fix in your config, your TOML, or your Docker setup.
+
+### The discovery reality for non-UNL validators
+
+This is the uncomfortable part: manifest propagation is a property of the **network**, not of your node. You cannot make other operators' nodes relay your manifest. Whether your key gets past the first hop depends on the peers you're connected to and the code *they* are running, not on anything in your `rippled.cfg`. That means:
+
+- **Domain verification cannot clear a 404.** It's the right thing to have configured, and it's what makes you *verifiable* the moment you're discovered — but it operates on a validator the explorer already knows. It is not a discovery mechanism.
+- **Rotating your validator token does not force fresh gossip.** It's a restart, and it does not help: a new manifest sequence still carries the same unlisted master key, so it's still "capped" and still hits the same relay gate. Don't do it for this.
+- **Raising your own untrusted cap doesn't help either.** xrpld 3.3.0 makes `kMaxUntrustedCount` configurable, but that setting governs how many untrusted manifests *your* node accepts from others — it does nothing for how other nodes treat *your* manifest.
+- The only thing that reliably fixes discovery for a non-UNL validator is the relay behavior changing **network-wide**, which is out of your hands.
+
+### What's upstream, and the honest timeline
+
+Issue #7926 is **open** as of this writing, with no fix merged and no PR linked to it.
+
+xrpld **3.3.0** (2026-08-06) did touch this area — it carried the 3.2.1 flood caps forward, corrected the manifest protocol message-size cap, and **raised** the default untrusted-key cache cap from 100 to 300 while making it configurable. That gives non-UNL manifests more room than 3.2.1 did, so 3.3.0 is worth running. But it does **not** remove the underlying relay gate that favours trusted or already-known keys, and it does not close #7926. **Upgrading to 3.3.0 is not expected, on its own, to clear the 404** — which matches what operators are seeing.
+
+Two things have to line up before a non-UNL validator reliably reappears on explorers:
+
+1. A rippled release that actually changes the relay gate so an unlisted manifest is forwarded at least one more hop (the fix #7926 is asking for), and
+2. **Enough of the network upgrading to that release** that the path from your validator to an explorer's crawler is made of nodes running it.
+
+Both are outside your control, and step 2 takes weeks to months after any release, because it depends on other operators upgrading. There is no configuration, no manual submission, and no domain trick that shortcuts it.
+
+### What to actually watch
+
+Keep your manifest and TOML correct (the two checks above), run a current xrpld, and then watch for the explorer's `last_seen` for your master key to start updating again. That's the real signal that the relay path has healed and your manifest is propagating — not anything you'll change on the node. Until then, treat your **local** agreement and `server_state` as the source of truth for whether your validator is healthy. A 404 on XRPSCAN is an explorer-visibility problem; it is not a validation problem, and it does not affect your standing on the network.
 
 ---
 
@@ -1913,9 +2200,14 @@ max_historical_shards=1
 # Network - Peers
 #-----------------------------------------------------------------------
 
+# Your own stock nodes — this validator peers ONLY through them.
+# Use each stock node's HOST peer port (51235), never a container-internal
+# port. Confirm BOTH are reachable from off-box before enabling private
+# peering below: [peer_private] fails closed (0 peers if these are down).
+# Full walkthrough: see "Private validator behind stock proxies".
 [ips_fixed]
-r.ripple.com 51235
-zaphod.alloy.ee 51235
+<stock-node-1-ip> 51235
+<stock-node-2-ip> 51235
 
 [peer_private]
 1
@@ -1952,6 +2244,8 @@ send_queue_limit = 100
 port = 51235
 ip = 0.0.0.0
 protocol = peer
+# Private validator: NOT port-forwarded and NOT allowed inbound at the
+# firewall. rippled needs this stanza to peer OUTBOUND to [ips_fixed] only.
 
 #-----------------------------------------------------------------------
 # Validator Identity
@@ -2030,7 +2324,7 @@ time.google.com
 |---------|-------|-----|
 | `node_size=huge` | 64 GB RAM allocation | Matches my hardware |
 | `online_delete=32768` | ~36 hours between deletes | Prevents I/O storms |
-| `peer_private=1` | Hides validator IP | Security best practice |
+| `peer_private=1` | Peers only with `[ips_fixed]`, no other connections | Keeps the validator off the public peer network; it reaches mainnet only through your stock nodes |
 | `peers_max=21` | 21 peer connections | Sufficient for reliable propagation |
 | `compression=true` | LZ4 compression | 60-80% bandwidth savings |
 | Admin ports on `127.0.0.1` | Localhost only | No external admin access |
@@ -2045,7 +2339,7 @@ time.google.com
 3. Generate token: `validator-keys create_token --keyfile validator-keys.json`
 4. Paste token into config
 5. Set file permissions: `chmod 600 /etc/opt/ripple/rippled.cfg`
-6. Configure firewall: only allow port 51235 inbound
+6. Configure firewall: this is a private validator, so do **not** allow port 51235 inbound — its peer port stays unpublished. Open 51235 inbound on your stock nodes instead. (For a public-peering validator, allow 51235 inbound here.)
 7. Set up domain verification via `.well-known/xrp-ledger.toml`
 8. Start rippled and verify sync: `rippled server_info`
 9. Monitor agreement percentage over time
@@ -2071,7 +2365,7 @@ Since `127.0.0.1` inside the rippled container is not the same as `127.0.0.1` in
 
 **The Security Model**
 
-With `ip = 0.0.0.0`, the `admin` parameter becomes your security control. It whitelists which IP addresses can execute privileged commands like `stop`, `validation_seed`, or `peers`.
+With `ip = 0.0.0.0`, the `admin` parameter becomes your security control. It whitelists which IP addresses can execute privileged commands like `stop`, `sign`, `submit`, or `peers`.
 
 **Basic Pattern (Subnet Whitelist)**
 
@@ -2081,13 +2375,13 @@ This allows any container on the Docker bridge networks:
 [port_rpc_admin_local]
 port = 5005
 ip = 0.0.0.0
-admin = 127.0.0.1, 172.17.0.0/16, 172.20.0.0/16
+admin = 127.0.0.1, 172.16.0.0/12
 protocol = http
 
 [port_ws_admin_local]
 port = 6006
 ip = 0.0.0.0
-admin = 127.0.0.1, 172.17.0.0/16, 172.20.0.0/16
+admin = 127.0.0.1, 172.16.0.0/12
 protocol = ws
 send_queue_limit = 100
 ```
@@ -2155,7 +2449,7 @@ Now only the rippled container itself (172.28.0.10), vmagent (172.28.0.20), and 
 
 | Pattern | Allowed Admin Access |
 |---------|---------------------|
-| Subnet whitelist (`172.17.0.0/16`) | ~65,000 potential IPs |
+| Subnet whitelist (`172.16.0.0/12`) | ~1 million potential IPs |
 | Static IP whitelist | Only your specific containers (2-3 IPs) |
 
 The static IP pattern follows the principle of least privilege.
@@ -2891,7 +3185,7 @@ Use these to verify your node's visibility and check network status:
 
 ## Directories
 
-These sites track validator performance and UNL status. Register your validator to build visibility.
+These sites track validator performance and UNL status. You don't register with them — they discover validators passively from the network and list them automatically once your manifest propagates. See [Why Your Validator 404s on XRPSCAN](#why-your-validator-404s-on-xrpscan) if your validator never appears.
 
 | Resource | URL | What It Shows |
 |----------|-----|---------------|
@@ -2900,7 +3194,7 @@ These sites track validator performance and UNL status. Register your validator 
 | **Bithomp Validators** | [bithomp.com/validators](https://bithomp.com/validators) | Validator listings, UNL tracking |
 
 **Post-deployment checklist:**
-1. Verify your validator appears on XRPSCAN
+1. Verify your validator appears on XRPSCAN (this happens on its own once your manifest propagates — you don't submit anything; if it never shows, see [Why Your Validator 404s on XRPSCAN](#why-your-validator-404s-on-xrpscan))
 2. Confirm domain verification shows correctly
 3. Check your amendment votes are recorded
 4. Monitor your agreement percentage over time
@@ -2927,7 +3221,7 @@ Getting on a UNL isn't automatic. It's earned over time.
 1. Run reliably for the long haul. There are no shortcuts.
 2. Set up domain verification from day one.
 3. Publish your validator's public key on your website.
-4. Register on validator directories like XRPSCAN.
+4. Make sure you're discoverable on validator directories like XRPSCAN. You don't register — they list you automatically once your manifest propagates — so if you're missing, treat it as a discovery problem (see [Why Your Validator 404s on XRPSCAN](#why-your-validator-404s-on-xrpscan)).
 5. Engage with the XRPL community.
 6. Be transparent about your operations.
 7. Consider running in an underrepresented region or on less-common infrastructure.
