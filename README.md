@@ -219,6 +219,8 @@ This is why you came here. While the official [Running an XRP Ledger Validator](
 
 **Validator Identity & Security**
 - **Domain Verification** - xrp-ledger.toml setup and common mistakes
+- **Domain Verification Troubleshooting** - two-sided verification, decoding your manifest, explorer lag
+- **Why Your Validator 404s on XRPSCAN** - passive discovery, the manifest relay gate, telling explorer bugs from network problems
 - **Validator Keys** - master key security, token management, compromise response
 - **Fee Voting** - reference fees and reserve settings
 

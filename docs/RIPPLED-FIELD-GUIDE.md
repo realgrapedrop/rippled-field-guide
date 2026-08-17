@@ -1093,7 +1093,7 @@ If you get a redirect (301/302), SSL error, or 404, fix that first. The TOML mus
 First, be precise about *what* is wrong, because the two failures have different causes:
 
 - Your validator **appears** on XRPSCAN but the domain shows as unverified, blank, or stale. This is a verification lag. If everything above checks out, wait. Third-party sites like [XRPSCAN](https://xrpscan.com/validators) and [Bithomp](https://bithomp.com/en/domains) can take up to 24 hours to reflect a verified domain. The XRPL.org [Domain Verifier](https://xrpl.org/resources/dev-tools/domain-verifier) updates in real time and is the best tool for confirming your setup is correct while you wait.
-- Your validator's page **404s entirely** — XRPSCAN has no record of your master key at all. This is not a verification problem and waiting will not fix it. It means your manifest never reached the explorer. See the next section.
+- Your validator's page **404s entirely**. This is not a verification problem. Either XRPSCAN has no record of your master key (your manifest never reached the explorer), or the record exists and the explorer's own API is failing on it while the page mislabels the error as "not found". The next section shows how to tell the two apart with one command.
 
 ---
 
@@ -1102,7 +1102,9 @@ First, be precise about *what* is wrong, because the two failures have different
 A 404 and an "unverified domain" look similar in a browser but are completely different failures. Getting them mixed up wastes days, because the fix for one does nothing for the other.
 
 - **Unverified** means XRPSCAN *found* your validator but hasn't confirmed the domain link. It has a page for your master key; the domain field is just empty or pending. This is the case the [troubleshooting section above](#domain-verification-troubleshooting) covers.
-- **404 (Not Found)** means XRPSCAN has *never seen* your validator. There is no page for your master key because no record of it ever arrived. Domain verification cannot clear a 404 — you cannot verify the domain of a validator the explorer doesn't know exists. Discovery has to happen first, and discovery is the part that is currently broken for validators outside the default UNL.
+- **404 (Not Found)** usually means XRPSCAN has *never seen* your validator. There is no page for your master key because no record of it ever arrived. Domain verification cannot clear a 404 — you cannot verify the domain of a validator the explorer doesn't know exists. Discovery has to happen first, and discovery is the part that the current relay-gating breaks for validators outside the default UNL.
+
+There is one more possibility, and it's worth ruling out before you blame discovery: the page is a JavaScript app, and it renders *any* failure of its backend API as a not-found page. If the explorer's per-validator API errors on your record (a 500, for example), you will stare at a "404" for a validator the explorer actually knows. The first check below catches this case in one command.
 
 ### How XRPSCAN actually finds a validator
 
@@ -1139,15 +1141,30 @@ Those caps did their job against the flood, but they caught legitimate non-UNL v
 
 This is tracked upstream as [rippled issue #7926, "3.2.1 manifest gossip broken for non-UNL validators"](https://github.com/XRPLF/rippled/issues/7926) (opened 2026-08-02).
 
-**3.3.0 — relieves the pressure, but is not a full fix.** The next release raised the cache cap (**100 → 300**) and made it configurable, and corrected the per-message size limit. That genuinely helps effect (1): with a larger, tunable cache, a legitimate non-UNL key is far less likely to be dropped for want of room. **But 3.3.0 did not remove the outbound-relay gate** — the cap on *passing untrusted manifests along*. So effect (2) is unchanged: even on 3.3.0 your manifest still is not relayed past the peers that already know it, an explorer's crawler still never receives it, and the page still 404s.
+**3.3.0 — relieves the pressure, but is not a full fix.** The next release raised the cache cap (**100 → 300**) and made it configurable, and corrected the per-message size limit. That genuinely helps effect (1): with a larger, tunable cache, a legitimate non-UNL key is far less likely to be dropped for want of room. **But 3.3.0 did not remove the outbound-relay gate** — the cap on *passing untrusted manifests along*. So effect (2) is largely unchanged: even on 3.3.0 your manifest may not be relayed past the peers that already know it, an explorer's crawler may never receive it, and the page can keep 404ing.
 
 That is precisely why upgrading to 3.3.0 — which is otherwise worth doing — does **not** clear the 404 on its own: it fixed the "not enough room to remember you" half and left the "won't pass you along" half in place. A full fix requires an upstream release that changes the relay gate itself for accepted-but-untrusted keys, **and** enough of the network upgrading to that release for your manifest to actually travel. Both are out of your hands.
 
 ### Confirm it's this, and not something on your end
 
-Before blaming the network, prove your own side is correct. Two things must be true.
+Before blaming the network, run three checks. The first tells you which failure you actually have; the other two prove your own side is correct.
 
-**1. Your manifest claims your domain.** Check what your validator is broadcasting.
+**1. Ask the explorer's API whether it knows your key.** The page can lie; the registry endpoint can't. Replace `<master_public_key>` with your master public key (`nH...`):
+
+```bash
+curl -s https://api.xrpscan.com/api/v1/validatorregistry | grep -c "<master_public_key>"
+```
+
+- **`0`**: the explorer genuinely has no record of you. That's the discovery problem this section is about. Continue with the checks below.
+- **`1` or more**: XRPSCAN knows your validator, and your 404 is *not* a discovery problem. Check the endpoint the page itself calls:
+
+  ```bash
+  curl -s -o /dev/null -w '%{http_code}\n' https://api.xrpscan.com/api/v1/validator/<master_public_key>
+  ```
+
+  A `500` here means the explorer's backend is failing on your record and the page is rendering that failure as a not-found. Nothing in your setup causes this and nothing in your setup fixes it. These have been observed to clear on their own within hours; if it persists for days, report it to XRPSCAN ([github.com/xrpscan/xrpscan.com](https://github.com/xrpscan/xrpscan.com/issues)) with both curl outputs.
+
+**2. Your manifest claims your domain.** Check what your validator is broadcasting.
 
 Native:
 
@@ -1177,7 +1194,7 @@ docker exec <container> rippled manifest <master_public_key>
 
 If the domain is present, your `[validator_token]` is correct and the manifest is well-formed. (If it's missing, this is the token-update mistake from the [troubleshooting section](#domain-verification-troubleshooting), not the relay bug — fix that first.)
 
-**2. Your `xrp-ledger.toml` is served and lists your key.** This is the other half of the two-way binding:
+**3. Your `xrp-ledger.toml` is served and lists your key.** This is the other half of the two-way binding:
 
 ```bash
 curl -sI https://YOUR_DOMAIN/.well-known/xrp-ledger.toml
@@ -1189,7 +1206,7 @@ You want a `200`, `content-type` of `application/toml` (or `text/plain`), and an
 curl -s https://YOUR_DOMAIN/.well-known/xrp-ledger.toml | grep -i public_key
 ```
 
-If both checks pass, your setup is complete and correct. A persistent 404 is then **not your fault** — it's the relay behavior described above. There is nothing left to fix in your config, your TOML, or your Docker setup.
+If check 1 returned `0` and checks 2 and 3 pass, your setup is complete and correct. A persistent 404 is then **not your fault** — it's the relay behavior described above. There is nothing left to fix in your config, your TOML, or your Docker setup.
 
 ### The discovery reality for non-UNL validators
 
@@ -1199,6 +1216,8 @@ This is the uncomfortable part: manifest propagation is a property of the **netw
 - **Rotating your validator token does not force fresh gossip.** It's a restart, and it does not help: a new manifest sequence still carries the same unlisted master key, so it's still "capped" and still hits the same relay gate. Don't do it for this.
 - **Raising your own untrusted cap doesn't help either.** xrpld 3.3.0 makes `kMaxUntrustedCount` configurable, but that setting governs how many untrusted manifests *your* node accepts from others — it does nothing for how other nodes treat *your* manifest.
 - The only thing that reliably fixes discovery for a non-UNL validator is the relay behavior changing **network-wide**, which is out of your hands.
+
+That said, the gate throttles gossip rather than sealing it off. Peer connections churn, more of the network upgrades, and a manifest can eventually land on a node an explorer crawls. Non-UNL validators have reappeared on XRPSCAN this way while [#7926](https://github.com/XRPLF/rippled/issues/7926) was still open, with no local change. Treat discovery as delayed, not dead.
 
 ### What's upstream, and the honest timeline
 
@@ -1215,7 +1234,14 @@ Both are outside your control, and step 2 takes weeks to months after any releas
 
 ### What to actually watch
 
-Keep your manifest and TOML correct (the two checks above), run a current xrpld, and then watch for the explorer's `last_seen` for your master key to start updating again. That's the real signal that the relay path has healed and your manifest is propagating — not anything you'll change on the node. Until then, treat your **local** agreement and `server_state` as the source of truth for whether your validator is healthy. A 404 on XRPSCAN is an explorer-visibility problem; it is not a validation problem, and it does not affect your standing on the network.
+Keep your manifest and TOML correct (checks 2 and 3 above), run a current xrpld, and then watch for the explorer's `last_seen` for your master key to start updating again. That's the real signal that the relay path has healed and your manifest is propagating — not anything you'll change on the node. You can watch it directly:
+
+```bash
+curl -s https://api.xrpscan.com/api/v1/validatorregistry | \
+  jq '.[] | select(.master_key=="<master_public_key>") | {last_seen, server_version}'
+```
+
+One caveat: registry fields other than `last_seen` can lag. A stale `server_version` there doesn't mean your upgrade failed; trust your node's own `server_info` for that. Until then, treat your **local** agreement and `server_state` as the source of truth for whether your validator is healthy. A 404 on XRPSCAN is an explorer-visibility problem; it is not a validation problem, and it does not affect your standing on the network.
 
 ---
 
