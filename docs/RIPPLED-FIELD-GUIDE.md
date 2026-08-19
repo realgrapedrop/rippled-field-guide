@@ -104,7 +104,7 @@ Some steps must happen in order. Getting this wrong causes problems:
 | Aspect | Stock Node | Validator |
 |--------|------------|-----------|
 | Hardware | 16-32 GB RAM, SSD | 32-64 GB RAM, NVMe |
-| `node_size` | medium/large | huge |
+| `node_size` | large (huge with 32 GB+) | huge |
 | `peer_private` | Not needed | Required (set to 1) |
 | Admin ports | Localhost | Localhost only |
 | Public WebSocket | Optional | Disabled |
@@ -157,6 +157,8 @@ Some steps must happen in order. Getting this wrong causes problems:
   - [Community Resources](#community-resources)
   - [Directories](#directories)
   - [Building Reputation](#building-reputation)
+- [Appendix](#appendix)
+  - [Appendix A: node_size Resync Test](#appendix-a-node_size-resync-test)
 - [Contributing](#contributing)
 
 ---
@@ -1406,6 +1408,8 @@ ss -tlnp | grep rippled
 
 **A fresh install takes 10-20 minutes to sync.** Don't configure as a validator until sync completes.
 
+A restart of an already-synced node is faster but not instant. On an 8 vCPU / 32 GB NVMe VPS, returning to `full` took 5-10 minutes in testing, and almost all of it was spent in `connected`. Once the node acquires the network's current validated ledger, the climb through `syncing` and `tracking` takes seconds.
+
 **What Happens During Sync**
 
 1. rippled connects to peers (check with `rippled peers`)
@@ -1442,7 +1446,7 @@ watch -n 5 'rippled server_info | grep -E "server_state|complete_ledgers|peers"'
 | Symptom | Likely Cause |
 |---------|--------------|
 | Stuck on `disconnected` | Firewall blocking port 51235, no outbound connectivity |
-| Stuck on `connected` | Peers connected but not sharing data (rare) |
+| `connected` for 5-10 minutes after a restart | Normal. The node is waiting to acquire the current validated ledger from peers (`Need consensus ledger` in the log). Past ~15 minutes, check `rippled peers` and consider `[ips_fixed]` toward known-good hubs |
 | Very slow sync | Undersized hardware, disk I/O bottleneck |
 | `server_state` cycling | Resource exhaustion, check RAM and disk |
 
@@ -1487,7 +1491,7 @@ Don't rush. A validator that goes down hurts your reputation. A stock node that 
 
 | Setting | Default | Production |
 |---------|---------|------------|
-| `node_size` | `medium` | `huge` for validators |
+| `node_size` | `medium` | `large` for stock nodes; `huge` for validators or any host with 32 GB+ |
 | `online_delete` | `512` | `16384-32768` (prevents I/O storms) |
 | Admin ports | May bind to `0.0.0.0` | `127.0.0.1` only |
 | `peer_private` | `0` | `1` for validators |
@@ -1535,11 +1539,32 @@ The `node_size` parameter is a macro that tunes multiple internal settings:
 - Database buffer sizes
 - Fetch pack sizes for historical data
 
+It does not decide how long a restarted node takes to reacquire the network's validated ledger. That phase (6-9 minutes on the test host below) is dominated by which peers it fetches from, not by cache size.
+
 **Why It Matters**
 
-- **Undersized**: Node falls behind, misses ledgers, poor sync performance
-- **Oversized**: Wastes memory, no performance benefit
+- **Undersized**: Node falls behind, misses ledgers, poor sync performance. `small` is the real cost: on an 8-core host it was the slowest to rejoin after a restart and pinned every core while catching up (a cache-starved node re-fetching and re-hashing what a larger cache would have kept).
+- **Oversized**: Costs memory, not time. A `huge` node on 3.3.0 sat around 12-13 GB RSS during a resync. It does not rejoin faster than `large`, but it runs cooler: average catch-up CPU fell from ~4 cores at `small` to ~3 at `huge`, and the peak from all 8 cores pinned to about 5.
 - **Just right**: Smooth operation with efficient resource use
+
+**Measured**
+
+Same host, same build, same peer pool, each size restarted twice (clean shutdown) and sampled every 15 seconds until `full`. Host: KVM VPS, 8 vCPU, 31 GB RAM, NVMe, xrpld 3.3.0 in Docker, ~13 GB NuDB with `online_delete=2000`, 10-11 peers. Values are round averages; n=2 per size, one provider, so treat these as the shape of the curve rather than a promise for your host. Full per-run data, method, and limits are in [Appendix A](#appendix-a-node_size-resync-test).
+
+| node_size | Time to `full` | Time in `connected` | xrpld CPU peak | RSS max |
+|-----------|----------------|---------------------|----------------|---------|
+| small | ~10:10 | ~8:40 | 11-13 cores (all pinned) | ~8.4 GB |
+| medium | ~8:50 | ~7:20 | ~6 cores | ~10 GB |
+| large | ~8:40 | ~7:00 | ~4.7 cores | ~11.7 GB |
+| huge | ~8:15 | ~6:40 | ~4.9 cores | ~12.4 GB |
+
+Three things stand out:
+
+1. `medium`, `large`, and `huge` finish within about 30 seconds of each other. `huge` was nominally fastest, but its edge sits inside run-to-run noise. Above `medium` you're trading RAM for lower CPU, not for a faster restart.
+2. `huge` on 31 GB is comfortable: ~12.5 GB RSS ceiling during resync, host at ~28% memory, nothing swapped. The RAM table's 32 GB is a floor, not what `huge` consumes.
+3. `online_delete` had no visible effect on resync (it governs retention and purge cadence, not catch-up). A change from 2000 to 32768 was tested for one restart and reverted.
+
+Restart-after-upgrade times of 8-16 minutes are normal on this class of VPS. Four Docker recreates on the same host that also changed the build ranged from 3:30 to 15:48 with no correlation to `node_size`. The variance came from build changes and peer luck.
 
 **Configuration**
 
@@ -2348,7 +2373,7 @@ time.google.com
 
 | Setting | Value | Why |
 |---------|-------|-----|
-| `node_size=huge` | 64 GB RAM allocation | Matches my hardware |
+| `node_size=huge` | Largest caches and thread pools; measured ~12-13 GB RSS on a 32 GB host during a resync, more with more history and traffic | Matches my hardware |
 | `online_delete=32768` | ~36 hours between deletes | Prevents I/O storms |
 | `peer_private=1` | Peers only with `[ips_fixed]`, no other connections | Keeps the validator off the public peer network; it reaches mainnet only through your stock nodes |
 | `peers_max=21` | 21 peer connections | Sufficient for reliable propagation |
@@ -2626,7 +2651,7 @@ A common operator instinct when `load_factor` rises is to start manually tuning 
 - `[io_threads]` and `[network_threads]` as top-level config sections are not valid rippled keys. rippled will ignore them or warn at startup.
 - Thread-pool sizing for I/O and networking is handled internally based on `node_size` and detected core count.
 
-If `load_factor_server` is consistently the cause of high readings, the lever is `node_size` — see [Node Sizing](#node-sizing). The progression is `small → medium → large → huge`. If you're already at `huge`, the answer is more host (more cores, more RAM, faster NVMe), not config tweaks.
+If `load_factor_server` is consistently the cause of high readings, the lever is `node_size` — see [Node Sizing](#node-sizing). The progression is `small → medium → large → huge`. Below `medium` the difference is large (all cores pinned during a catch-up at `small`); above `medium` the gain is steadier CPU, not faster sync. If you're already at `huge`, the answer is more host (more cores, more RAM, faster NVMe), not config tweaks.
 
 **Brief spikes are normal — alert on sustained windows**
 
@@ -3254,10 +3279,90 @@ Getting on a UNL isn't automatic. It's earned over time.
 
 ---
 
+# Appendix
+
+Raw data behind recommendations in the guide. Each entry states the setup, the method, and the numbers, so you can judge how far the result carries to your own host.
+
+## Appendix A: node_size Resync Test
+
+This is the experiment behind the numbers in [Node Sizing](#node-sizing) and the restart timing in [Initial Sync](#initial-sync). It measured how `[node_size]` affects a node's return to `full` after a clean restart.
+
+**Setup**
+
+- Host: one KVM VPS, 8 vCPU, 31 GB RAM, NVMe, Ubuntu 24.04
+- Software: xrpld 3.3.0 in Docker (`xrpllabsofficial/xrpld`, `stop_grace_period: 90s`)
+- Database: ~13 GB NuDB, `online_delete=2000`
+- Peers: 10-11 throughout, same peer pool for every run
+- Dates: 2026-08-18 and 2026-08-19
+
+**Method**
+
+For each `node_size`, the node was restarted with `docker restart` (clean shutdown) and sampled every 15 seconds until `server_state` reached `full`. Two rounds; the second ran in reverse order so time of day and run order don't line up with size. CPU is the xrpld process (100% = one core); peaks are 15-second samples. RSS is the process resident set.
+
+**Results**
+
+| node_size | Round | Time to `full` | Time in `connected` | CPU avg | CPU peak | RSS max |
+|-----------|-------|----------------|---------------------|---------|----------|---------|
+| small | 1 | 10:02 | 8:45 | 396% | **1341%** | 7.9 GB |
+| small | 2 | 10:20 | 8:30 | 382% | **1126%** | 8.8 GB |
+| medium | 1 | 8:39 | 7:15 | 336% | 600% | 10.2 GB |
+| medium | 2 | 9:04 | 7:30 | 350% | 626% | 9.9 GB |
+| large | 1 | 8:15 | 6:45 | 300% | 462% | 11.7 GB |
+| large | 2 | 9:02 | 7:15 | 310% | 484% | 11.6 GB |
+| huge | 1 | 8:21 | 6:45 | 290% | 471% | 12.3 GB |
+| huge | 2 | 8:09 | 6:30 | 316% | 510% | 12.5 GB |
+
+**Reading the table**
+
+- The `connected` phase dominates every run: 6.5 to 8.75 minutes waiting to acquire the network's validated ledger, then seconds through `syncing` and `tracking`. `node_size` barely moves it. Peer selection is the untested lever.
+- `small` is the outlier: slowest by 1-2 minutes and a CPU peak of 11-13 cores on an 8-core host. That's a cache-starved node re-fetching and re-hashing what a larger cache would have kept.
+- `medium`, `large`, and `huge` finish within about 30 seconds of each other. `huge` was nominally fastest, but its edge over `large` (~25 seconds) sits inside the run-to-run spread of a single size (`large` alone ranged 8:15 to 9:02). Above `medium`, the size buys lower CPU (average and peak both fall), not a faster restart.
+- RSS rises with size (~8 → ~10 → ~11.7 → ~12.4 GB). `huge` on 31 GB left the host at ~28% memory with nothing swapped.
+
+**Related observations, same host, same nights**
+
+- Four Docker recreates that also changed the build (3.3.0 → 3.2.1 → 3.3.0) at various sizes ranged from 3:30 to 15:48 to `full`, with no correlation to size. Build changes and peer luck explain the variance, not `node_size`.
+- Two other hosts of the same shape restarted once each on `huge`: a stock node in 5:05, a validator in ~4:45 (to `proposing`).
+- `online_delete` was changed from 2000 to 32768 for one restart. No visible effect on resync (it governs retention and purge cadence, not catch-up), so it was reverted.
+
+**Limits of this data**
+
+- n=2 per size, one host, one provider's KVM. Treat it as the shape of the curve, not a promise for your hardware.
+- Every run is a stock node reaching `full`. A validator's path to `proposing` should have the same shape, but it wasn't measured here.
+- Not tested: a 16 GB host at `medium` vs `large` (the boundary most VPS operators sit on), and whether `[ips_fixed]` toward known-good hubs shortens the `connected` phase. Both would sharpen the recommendations above.
+
+**Run it yourself**
+
+The whole experiment is one sampling loop. Run it on a stock node (not your production validator; every run is a restart), and share the rows if you get numbers on different hardware.
+
+1. Set `[node_size]` in your config and restart cleanly (`docker restart <container>`, or `systemctl restart rippled`).
+2. Start sampling the moment the restart command returns:
+
+   ```bash
+   # Native. Docker: prefix the rippled call with `docker exec <container>` and use
+   # `docker stats --no-stream --format '{{.CPUPerc}} {{.MemUsage}}' <container>` for CPU/RSS.
+   T0=$(date +%s)
+   while true; do
+     ST=$(rippled server_info 2>/dev/null | grep -oP '"server_state" : "\K[^"]+')
+     CPU=$(ps -o %cpu= -C rippled | awk '{s+=$1} END {print s}')
+     RSS=$(ps -o rss= -C rippled | awk '{s+=$1} END {printf "%.1f", s/1048576}')
+     echo "$(( $(date +%s) - T0 ))s state=${ST:-none} cpu=${CPU:-0}% rss=${RSS:-0}GB"
+     [ "$ST" = "full" ] || [ "$ST" = "proposing" ] && break
+     sleep 15
+   done
+   ```
+
+3. Record from the output: total seconds to `full`, seconds spent in `connected`, peak `cpu`, max `rss`.
+4. Repeat each size at least twice, and reverse the order on the second pass so time of day doesn't line up with size.
+
+Keep the build, the peer set, and `online_delete` fixed across runs, or you'll measure those instead of `node_size`.
+
+---
+
 # Contributing
 
 This document is maintained by [xrp-validator.grapedrop.xyz](https://xrp-validator.grapedrop.xyz). Contributions, corrections, and additional insights are welcome.
 
 ---
 
-*Last updated: 2026-01-19*
+*Last updated: 2026-08-19*

@@ -229,6 +229,7 @@ This is why you came here. While the official [Running an XRP Ledger Validator](
 
 **Reference**
 - **Putting It All Together** - Complete production rippled.cfg example
+- **Appendix A: node_size Resync Test** - Measured restart times, CPU, and memory per `node_size`, with method and limits
 
 Each entry follows the same format:
 1. **Bottom-line recommendation** - what to do
