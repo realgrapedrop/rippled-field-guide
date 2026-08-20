@@ -1245,6 +1245,22 @@ curl -s https://api.xrpscan.com/api/v1/validatorregistry | \
 
 One caveat: registry fields other than `last_seen` can lag. A stale `server_version` there doesn't mean your upgrade failed; trust your node's own `server_info` for that. Until then, treat your **local** agreement and `server_state` as the source of truth for whether your validator is healthy. A 404 on XRPSCAN is an explorer-visibility problem; it is not a validation problem, and it does not affect your standing on the network.
 
+### Where this stands (late August 2026)
+
+Good news first: the explorer side is moving.
+
+XRPSCAN shipped a complete redesign of the site in late August, and it includes a first round of fixes for this exact problem. Pages for affected validators now load instead of returning a 404. A banner explains that untrusted manifests are propagating slowly on the peer network after the flood incident. Your version number now displays correctly too, thanks to a workaround that reads it from your validation messages instead of waiting for a manifest that may never arrive. Some of what shipped is cosmetic while the deeper fixes are still in the pipeline, and the maintainer has said as much on the issues I filed ([#70](https://github.com/xrpscan/xrpscan.com/issues/70), [#71](https://github.com/xrpscan/xrpscan.com/issues/71)). They triaged both within a day. They're doing their best with a problem that's mostly not theirs.
+
+What may still look wrong: your page can load fine but show "Agreement scores are unavailable" with an empty history. In plain terms, here's why. Every validation you send is signed with your short-lived signing key. The manifest is the document that tells everyone "this signing key belongs to that validator". The shared history service behind the explorers never received your manifest, so it has been filing your validations under the bare signing key with no owner attached. Your scores exist and are being counted. Mine showed 100% agreement in that database on the same day my page said "unavailable". They just aren't connected to your validator's page yet.
+
+None of this needs a change on your node. The real fixes are coming in three places, all outside your config:
+
+1. **XRPSCAN**, which has been responsive and is shipping incrementally.
+2. **The validator history service** (the shared database explorers read from). The lookup bug affecting these validators has been found, and an issue is open ([validator-history-service#503](https://github.com/ripple/validator-history-service/issues/503)).
+3. **rippled itself** ([#7926](https://github.com/XRPLF/rippled/issues/7926)), which has to start relaying manifests for unlisted validators again. That's the root of everything on this page.
+
+Small teams maintain these services, mostly for free, and they've been quick to engage when given a clear report. Give the fixes time to land. Keep your node healthy, check back with the commands above, and resist the urge to change config that was never broken.
+
 ---
 
 ## Fee Voting
@@ -3365,4 +3381,4 @@ This document is maintained by [xrp-validator.grapedrop.xyz](https://xrp-validat
 
 ---
 
-*Last updated: 2026-08-19*
+*Last updated: 2026-08-20*
