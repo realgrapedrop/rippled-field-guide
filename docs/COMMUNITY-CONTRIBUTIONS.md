@@ -20,6 +20,7 @@ The Rippled Field Guide is a community effort. This page recognizes everyone who
 | [@jgrimm5](https://x.com/jgrimm5) | Field Tested | Confirmed `online_delete` and `node_size` tuning resulted in zero missed ledgers in 24 hours, which was rare before the change | 01/2026 |
 | [@realgrapedrop](https://github.com/realgrapedrop) | Best Practices | Installation best practices section covering packages vs source, service accounts, post-install verification, initial sync, and stock node first | 01/2026 |
 | [@REClosureDEX](https://x.com/REClosureDEX) | Field Tested | Confirmed `online_delete` tuning resolved validator dropping 2 ledgers hourly on a third-party configured setup | 02/2026 |
+| [@krisdangerfield](https://x.com/krisdangerfield) | Performance | `online_delete` disk sizing formula (MB/ledger x ledgers between rotations x 2), an independent ~1.1 MB/ledger measurement, and the catch that the guide's 16-24 GB figure had gone stale | 09/2026 |
 
 ---
 

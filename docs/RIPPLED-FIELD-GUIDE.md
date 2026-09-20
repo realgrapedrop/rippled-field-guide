@@ -197,7 +197,7 @@ Storage speed is critical. Requirements:
 
 - **Type**: SSD or NVMe (spinning disks will not work)
 - **IOPS**: 10,000+ sustained (not burst)
-- **Capacity**: 50 GB minimum for the nodestore partition. Plan for growth based on your `online_delete` setting.
+- **Capacity**: Size from your `online_delete` setting, not a fixed number. At the recommended 32768, NuDB alone peaked at ~100 GB on my validator in September 2026. 250 GB is a sane floor for the nodestore partition. See [online_delete Tuning](#online_delete-tuning) for the formula.
 - **Layout (recommended)**: Use two NVMe drives. Dedicate one to the nodestore (`/var/lib/rippled`). Put OS, swap, and logs on the other. NuDB I/O is the validator's hot path, and isolating it from everything else (including swap) is the single biggest disk-side performance win.
 - **Layout (single-disk fallback)**: A single NVMe works (cloud VMs, small bare-metal hosts). You lose I/O isolation entirely and any heavy host-level I/O can affect consensus. See [Host Memory & Swap](#host-memory--swap) for mitigations.
 - **Endurance**: NuDB writes constantly. Choose NVMe drives with strong TBW (Total Bytes Written) ratings. Avoid DRAM-less budget drives for the nodestore.
@@ -1677,14 +1677,41 @@ A validator can have perfect agreement scores most of the time but experience pe
 
 **The Trade-off**
 
-| online_delete | Disk Space | I/O Pattern | Delete Frequency |
-|---------------|------------|-------------|------------------|
-| 512 | ~250 MB | Sawtooth (bad) | Every 30 min |
-| 2000 | ~1 GB | Spiky | Every 2 hours |
-| 16384 | ~8-12 GB | Smooth | Every 14-18 hours |
-| 32768 | ~16-24 GB | Very smooth | Every 36 hours |
+| online_delete | Rotation Interval | I/O Pattern |
+|---------------|-------------------|-------------|
+| 512 | Every ~30 min | Sawtooth (bad) |
+| 2000 | Every ~2 hours | Spiky |
+| 16384 | Every ~18 hours | Smooth |
+| 32768 | Every ~36 hours | Very smooth |
 
-**The trade-off is minimal:** Even at 16384, you're only using ~8-12 GB more disk space in exchange for dramatically smoother I/O and more stable validation.
+The cost is disk. Higher values keep more ledgers, and the store holds up to two copies of them.
+
+**Disk Sizing**
+
+**Peak NuDB disk = measured MB/ledger x ledgers between rotations x 2.**
+
+- **Why x 2:** rotation keeps the old backend (archive) until the new one (writable) has filled. Disk use cycles between 1x just after a rotation and 2x just before the next.
+- **MB/ledger tracks network activity.** I measured 0.65 to 1.3 on mainnet in September 2026 (median ~0.9). Another operator measured ~1.1 the same month. Earlier versions of this guide quoted about half that, which was right when it was written. Any fixed GB table goes stale.
+- **Ledgers between rotations** is about `online_delete` with `advisory_delete=0`. With a scheduled `can_delete` it's longer. A daily trigger at 32768 rotates every 48 hours (~44,300 ledgers).
+
+Example at `online_delete=32768`: 1.3 x 32768 x 2 = ~85 GB peak. Over 16 rotations, my validator's peak ranged from 64 GB to 99 GB, and peak over minimum averaged 2.0.
+
+Size for your worst measured cycle, keep 30% free on top, and re-measure every few months.
+
+**Measure Your Own MB/ledger**
+
+The archive backend is frozen after a rotation, so its size is one complete copy. No need to wait a full cycle.
+
+```bash
+# One line per backend. Two directories is normal.
+du -sb /var/lib/rippled/db/nudb/*
+
+# Which is the archive, and the ledger of the last rotation
+sqlite3 -readonly /var/lib/rippled/db/state.db \
+  "select WritableDb, ArchiveDb, LastRotatedLedger from DbState;"
+```
+
+MB/ledger = archive bytes / 1,000,000 / ledgers between the last two rotations. Note `LastRotatedLedger` after two consecutive rotations and subtract, or estimate from hours between rotations x 3600 / 3.9. Divide by the real interval, not by `online_delete`, if your rotations are scheduled. Write the date next to the result.
 
 **Configuration**
 
@@ -1708,6 +1735,7 @@ After changing `online_delete` and restarting rippled:
 1. The first delete cycle will still occur at the previous threshold
 2. The smooth I/O pattern becomes visible after ledger count exceeds the new threshold
 3. Monitor your disk I/O - the sawtooth pattern should disappear
+4. Watch the NuDB directory size over one full cycle. Expect a sawtooth in size (not I/O): minimum right after rotation, about double just before the next. See [Disk Sizing](#online_delete-tuning) above.
 
 **Additional Tuning Parameters**
 
@@ -1717,11 +1745,11 @@ If you still experience issues, these parameters in `[node_db]` may help:
 
 **The One Rule**
 
-**Never use low values to "save disk space."** You'll pay for it in I/O storms and degraded validator performance. Disk is cheap; validator reputation isn't.
+**Never use low values to "save disk space."** You'll pay for it in I/O storms and degraded validator performance. Budget ~100 GB of peak NuDB disk for 32768 (September 2026) and move on. Disk is cheap; validator reputation isn't.
 
 **Source**
 
-This issue was identified by [@shortthefomo](https://github.com/shortthefomo) and documented in [rippled issue #6202](https://github.com/XRPLF/rippled/issues/6202), with technical explanation from Ripple engineer [@ximinez](https://github.com/ximinez).
+This issue was identified by [@shortthefomo](https://github.com/shortthefomo) and documented in [rippled issue #6202](https://github.com/XRPLF/rippled/issues/6202), with technical explanation from Ripple engineer [@ximinez](https://github.com/ximinez). The disk sizing formula, and the catch that this guide's old GB figures had gone stale, came from Kris Dangerfield ([@krisdangerfield](https://x.com/krisdangerfield)).
 
 ### advisory_delete
 
@@ -1740,6 +1768,8 @@ This issue was identified by [@shortthefomo](https://github.com/shortthefomo) an
 
 - **`0` (recommended)**: Standard deployments. rippled handles everything.
 - **`1`**: Only if you have external tooling that needs to process ledger data before deletion, or you're running a specialized archival integration.
+
+> **Disk note:** with `advisory_delete=1`, rotation waits for your `can_delete` trigger. A daily trigger with `online_delete=32768` rotates every 48 hours, which holds ~35% more data per copy than free-running. Size the disk for the real interval. See [Disk Sizing](#online_delete-tuning).
 
 **Configuration**
 
@@ -2747,7 +2777,7 @@ The `postrotate` command tells rippled to close and reopen its log file. Adjust 
 | Component | Location | Growth Rate | Notes |
 |-----------|----------|-------------|-------|
 | Ledger database (NuDB) | `/var/lib/rippled/db/nudb` | ~12 GB/day (full history) | Controlled by `online_delete` |
-| SQLite databases | `/var/lib/rippled/db` | Minimal | wallet.db, transaction.db |
+| SQLite databases | `/var/lib/rippled/db` | Usually small, but check | wallet.db, transaction.db. `transaction.db` can reach tens of GB |
 | Logs | `/var/log/rippled` | Depends on log level | Controlled by logrotate |
 
 **Monitoring Commands**
@@ -2765,7 +2795,7 @@ df -h /var/lib/rippled
 
 **The online_delete Trade-off**
 
-As covered in [Database Management](#database-management), higher `online_delete` values (16384-32768) use more disk but prevent I/O storms. Monitor your disk usage and adjust accordingly. With `online_delete=32768`, expect 16-24 GB for the ledger database.
+As covered in [Database Management](#database-management), higher `online_delete` values (16384-32768) use more disk but prevent I/O storms. Monitor your disk usage and adjust accordingly. NuDB size is a sawtooth, not a flat line: one copy of the window right after rotation, two copies just before the next. With `online_delete=32768`, expect roughly 35-50 GB at the low point and 65-100 GB at the peak (September 2026). Alert on the peak, not the average. To measure your own node, see [online_delete Tuning](#online_delete-tuning).
 
 ### Database Maintenance
 
