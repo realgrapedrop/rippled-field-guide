@@ -3124,6 +3124,32 @@ sudo apt update
 
 **Source:** [Update Manually on Ubuntu](https://xrpl.org/update-rippled-manually-on-ubuntu.html)
 
+### Upgrading in Docker
+
+**The Bottom Line**
+
+**Build your own image from the signed package.** Official xrpld binaries ship as signed DEB and RPM packages, and the install guide has no Docker section. Third-party images can lag behind a release, and when a new amendment is on a two-week clock, that lag can leave you amendment blocked. Your own build removes the wait.
+
+Full step-by-step guide: **[xrpld in Docker: Build Your Own Image from the Signed Package](XRPLD-DOCKER-IMAGE.md)**
+
+**The Short Version**
+
+1. Verify the release: the announcement's SHA-256, the package index, and the signing key fingerprint
+2. Build `localhost/xrpld:<version>` from the signed DEB (about a minute)
+3. Test the image with your exact production mounts and user, with no network
+4. Swap with `docker compose up -d --timeout 300 <service>`, never `down`
+5. Verify the version, your identity keys, `proposing`, and that the network sees your validations
+
+**The Trap**
+
+The old `xrpllabsofficial` image ran as root. The image in the guide defaults to uid 997. If your compose file has no `user:` line, the entrypoint can't copy your config into place, and xrpld starts on the stock config with no validator token. It still syncs to `full`, and a healthcheck that accepts `full` stays green. Step 3 of the guide catches this before you swap.
+
+**Example: xrpld 3.4.1 (September 2026)**
+
+3.4.1 was an emergency release. Its new amendment had supermajority support on release day and a two-week clock to enable. The signed packages were out the same day, but `xrpllabsofficial/xrpld` still had no 3.4.x tag a day later. I built my own image and upgraded: 28 seconds without RPC, and `proposing` again 3 min 15 s after the new container started.
+
+**Source:** [Installing xrpld](https://github.com/XRPLF/rippled/blob/develop/docs/install.md) (packages and signing key), [XRPL Blog](https://xrpl.org/blog) (release announcements with the package SHA-256), [Introducing XRP Ledger version 3.4.1](https://xrpl.org/blog/2026/xrpld-3.4.1) (the example)
+
 ### Post-Upgrade Verification
 
 After upgrading, verify the server is healthy:
