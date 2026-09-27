@@ -225,7 +225,7 @@ This is why you came here. While the official [Running an XRP Ledger Validator](
 - **Fee Voting** - reference fees and reserve settings
 
 **Post-Deployment**
-- **Upgrading in Docker** - build your own xrpld image from the signed package, test it, and swap it in safely ([standalone guide](docs/XRPLD-DOCKER-IMAGE.md))
+- **Upgrading in Docker** - the official `rippleci/xrpld` image, moving from `xrpllabsofficial`, or building your own from the signed package ([standalone guide](docs/XRPLD-DOCKER-IMAGE.md))
 - **Community Resources** - Network explorers, validator directories, staying informed, getting help
 
 **Reference**

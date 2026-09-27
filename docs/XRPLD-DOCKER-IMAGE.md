@@ -1,38 +1,114 @@
-# xrpld in Docker: Build Your Own Image from the Signed Package
+# xrpld in Docker: The Official Image, or Build Your Own
 
-*A companion to [The Rippled Field Guide](RIPPLED-FIELD-GUIDE.md). Written 2026-09-26, from a production validator upgrade (3.3.0 to 3.4.1).*
+*A companion to [The Rippled Field Guide](RIPPLED-FIELD-GUIDE.md). Written 2026-09-26 from a production validator upgrade (3.3.0 to 3.4.1). Updated 2026-09-27: Ripple now publishes an official image.*
 
 ## Bottom Line
 
-- Since 3.4.0, official xrpld binaries ship only as signed DEB and RPM packages at `packages.xrplf.org`. The official install guide has no Docker section.
-- Third-party images lag. `xrpllabsofficial/xrpld` stops at 3.3.0, and waiting for it can run you into an amendment-block deadline.
-- Build the image yourself, on the validator box, from the signed DEB. It takes about a minute.
-- Verify three things before you trust it: the signing key fingerprint, the .deb SHA-256 from the release announcement, and the commit hash the binary reports.
-- **Test the new image with your exact production mounts and user before you swap.** A wrong runtime user doesn't crash the node. It starts xrpld on the package's stock config, with no validator token, and your healthcheck still passes.
+- **Use the official image: [`rippleci/xrpld`](https://hub.docker.com/r/rippleci/xrpld/tags).** Ripple's release process publishes it automatically. 3.4.1 went up on release day. The tags page shows every tag with a copy/paste `docker pull` command.
+- **It isn't a drop-in for `xrpllabsofficial/xrpld`.** The entrypoint, user, config path and logging all differ. Read [Moving from xrpllabsofficial](#moving-from-xrpllabsofficial) before you swap. `xrpllabsofficial/xrpld` stops at 3.3.0, and its maintainer has retired it in favour of the official image.
+- **Building your own from the signed package is still a solid alternative.** It verifies the package signature chain itself, and it keeps the old image's `/config` contract. See [Option 2](#option-2-build-your-own-from-the-signed-package).
+- **Either way, test the new image with your exact production mounts and user before you swap.** A wrong user or path doesn't always crash the node. It can start on the stock config with no validator token, reach `full`, and pass a healthcheck.
 - Give the old container time to stop cleanly (`--timeout 300`), and keep the old image for rollback. The rollback expires when the new release's amendment enables.
 
-## Why Build Your Own
+## Option 1: The Official Image (rippleci/xrpld)
 
-| Option | Trust chain | Lag |
+### Where It Comes From
+
+- Docker Hub: [hub.docker.com/r/rippleci/xrpld/tags](https://hub.docker.com/r/rippleci/xrpld/tags)
+- Mayukha Vadari (Ripple), 2026-09-19: "FYI this one auto updates as a part of the release process" ([post](https://x.com/msvadari/status/2101364629037576276))
+- The `xrpllabsofficial/xrpld` maintainer, 2026-09-21: "I'm shutting this one down, Ripple publishes:" with a link to that post ([WietseWind/docker-xrpld#31](https://github.com/WietseWind/docker-xrpld/issues/31))
+
+The Hub page itself has no description yet, and the install guide doesn't mention Docker. The posts above are the official word so far.
+
+**Tags**
+
+| Tag | Use |
+|---|---|
+| `3.4.1` (a release version) | Production. Pin it |
+| `3.4.0-rc1`, `3.4.0-b3` | Release candidates and betas. Test networks only |
+| `develop`, commit hashes | CI builds of unreleased code. Never production |
+
+There's no `latest` tag. That's a good thing: your compose file always says which version you run.
+
+### Verify It
+
+Check what you pulled before you run it:
+
+```bash
+docker pull rippleci/xrpld:3.4.1
+docker run --rm --network none rippleci/xrpld:3.4.1 --version
+docker history --no-trunc rippleci/xrpld:3.4.1 | grep -o 'DEB_SHA256=[0-9a-f]*'
+docker image inspect rippleci/xrpld:3.4.1 --format '{{json .RepoDigests}}'
+```
+
+| Check | Pass |
+|---|---|
+| `Git commit hash:` | matches the release announcement |
+| `DEB_SHA256=` | matches the DEB SHA-256 in the release announcement |
+| RepoDigest | record it. You can pin `rippleci/xrpld@sha256:...` in compose so the tag can't move under you |
+
+What I found in `3.4.1`: the build downloads the `.deb` from packages.xrplf.org and runs `sha256sum -c` against the announced hash (`cae8ce3b...6f26`) before it installs it. The binary reports commit `d147fccf`, which matches the announcement. The package is pinned by its hash, not checked through apt's signature chain. If you want that chain verified on your own machine, use Option 2.
+
+### How It Differs from xrpllabsofficial/xrpld
+
+| | `xrpllabsofficial/xrpld` | `rippleci/xrpld` |
 |---|---|---|
-| Official DEB/RPM | XRPLF signing key, SHA-256 in the announcement | None |
-| Third-party image | Whoever built it | Days to never |
-| Your own image from the DEB | The same as the DEB, verified by you | None |
+| Entrypoint | `/entrypoint.sh`, which copies `/config/*` into `/etc/xrpld/` | `/usr/bin/xrpld` directly, no copy step |
+| Config mount | `/config/rippled.cfg` or `/config/xrpld.cfg` | `/etc/xrpld/xrpld.cfg` |
+| validators.txt | `/config/validators.txt` | `/etc/xrpld/validators.txt` |
+| Runtime user | root | `xrpld`, uid 999 |
+| Console logs | everything | startup only (`--silent`). The rest goes to `[debug_logfile]` |
+| Tools inside | bash, grep, cmp. No curl | bash, grep, cmp. No curl |
 
-As of 2026-09-26, `xrpllabsofficial/xrpld` on Docker Hub still tops out at 3.3.0. `rippleci/xrpld` does have a 3.4.1 tag, but it's a CI account with no description, and neither the install guide nor the release announcement mentions it. I can't tell you how it's built, so I don't run it.
+I measured the log difference with the stock config and no network: 6 lines in `docker logs` with `--silent`, and 152 lines in 15 seconds without it.
 
-**Example: xrpld 3.4.1.** It shipped as an emergency release on 2026-09-25. Its new amendment, `fixBatchV1_2`, already had supermajority support on release day and was expected to enable on 2026-10-09. Any server not upgraded by then becomes amendment blocked. The signed packages were out the same day, but a day later `xrpllabsofficial/xrpld` still had no 3.4.x tag. With your own build, the deadline depends on nobody but you.
+### Moving from xrpllabsofficial
 
-## What You Need
+```yaml
+    image: rippleci/xrpld:3.4.1
+    user: "999:999"              # or "0:0" if your data dir is root-owned (see below)
+    command: ["--net", "--conf", "/etc/xrpld/xrpld.cfg"]   # drops --silent, so docker logs keeps working
+    stop_grace_period: 5m
+    volumes:
+      - /path/to/rippled.cfg:/etc/xrpld/xrpld.cfg:ro
+      - /path/to/validators.txt:/etc/xrpld/validators.txt:ro
+      - /path/to/data:/var/lib/rippled   # keep the container path your [node_db] and [database_path] use
+```
 
-- An x86_64 Linux host with Docker (the package is amd64 only)
-- Outbound HTTPS to `packages.xrplf.org` and the Ubuntu archive
-- Two files: a `Dockerfile` and an `entrypoint.sh` ([Appendix](#appendix-the-two-files))
-- Your current `docker-compose.yml`, and 15 minutes
+Check each of these before you swap:
 
-## Step 1: Verify the Release
+| Trap | Check | Fix |
+|---|---|---|
+| The config isn't readable by uid 999 | `stat -c '%u:%g %a' /path/to/rippled.cfg`. A `0640` file with group root gave me `Permission denied` | Make it readable by that uid (group or owner), or run as `0:0` |
+| The data dir isn't writable by uid 999 | `stat -c '%u:%g' /path/to/data` | `chown -R 999:999 /path/to/data` while the node is stopped, or run as `0:0` |
+| `[validators_file]` points at the old path | `grep -A1 '^\[validators_file\]' rippled.cfg` | `/etc/xrpld/validators.txt` |
+| Logs disappear | Anything that reads `docker logs` (alerts, rotation watchers) sees nothing after startup | Drop `--silent` as above, or point `[debug_logfile]` at a writable mounted path and read that |
+| Healthcheck uses curl | There's no curl in the image | `xrpld --conf /etc/xrpld/xrpld.cfg -q server_info \| grep -Eq '"server_state"\s*:\s*"(proposing\|full)"'` works |
 
-Do this before you build anything.
+Dry run with no network, as the uid you'll run:
+
+```bash
+docker run --rm --network none --user 999:999 \
+  -v /path/to/rippled.cfg:/etc/xrpld/xrpld.cfg:ro \
+  -v /path/to/validators.txt:/etc/xrpld/validators.txt:ro \
+  --entrypoint /bin/sh rippleci/xrpld:3.4.1 -c \
+  'cat /etc/xrpld/xrpld.cfg >/dev/null && echo CFG_OK; cat /etc/xrpld/validators.txt >/dev/null && echo VL_OK'
+```
+
+Then go to [Swap](#swap).
+
+## Option 2: Build Your Own from the Signed Package
+
+**When it makes sense**
+
+- You want apt to verify the XRPLF signature chain on your own machine, with the key fingerprint checked, rather than trust a CI build.
+- You want the old `/config` entrypoint contract, so the swap from `xrpllabsofficial/xrpld` is a one-line image change.
+- You want to control the base image and its patch cadence.
+- The official image is late or missing for a release you need.
+
+It takes about a minute and uses the two files in the [Appendix](#appendix-the-two-files).
+
+### Build Step 1: Verify the Release
 
 **1a. Read the announcement** at `https://xrpl.org/blog/<year>/xrpld-<version>`. Write down the DEB SHA-256 and the commit hash. Also read every announcement you're skipping over, since config changes hide there.
 
@@ -59,16 +135,7 @@ uid                      XRPLF Packages <distribution@xrplf.org>
 
 The fingerprint must match what the [install guide](https://github.com/XRPLF/rippled/blob/develop/docs/install.md) and [xrpl.org](https://xrpl.org/docs/infrastructure/installation/install-rippled-on-ubuntu) publish. If it doesn't, stop. The key has rotated before, so confirm any new one from both sources.
 
-**1d. Note your deadline.** Ask your node which amendments have majority:
-
-```bash
-docker exec <container> xrpld --conf /etc/xrpld/xrpld.cfg -q feature \
-  | jq -r '.result.features[] | select(.enabled==false and .majority!=null) | "\(.name // "?") supported=\(.supported) majority=\(.majority)"'
-```
-
-`majority` is in Ripple epoch seconds. Convert it with `date -u -d @$((majority + 946684800))`, then add 14 days. An amendment your version doesn't support (`supported=false`, often `name=?`) blocks you on that date.
-
-## Step 2: Build the Image
+### Build Step 2: Build the Image
 
 Put the two files from the appendix in one directory and build. For another release, swap in its version and its announced SHA-256:
 
@@ -91,7 +158,7 @@ What the Dockerfile does:
 | Installs one exact version, after checking the .deb's SHA-256 | A second, independent check on the same bytes |
 | Checks `dpkg` and `xrpld --version` report what you asked for | What went in is what you asked for |
 | Removes curl and gnupg, keeps ca-certificates | xrpld fetches validator lists over HTTPS |
-| Runs as uid 997 by default, entrypoint `/entrypoint.sh` | The same contract as the old `xrpllabsofficial` image |
+| Runs as uid 997 by default, entrypoint `/entrypoint.sh` | The same `/config` contract as the old `xrpllabsofficial` image |
 
 The `localhost/` prefix matters. That name can never resolve to Docker Hub, so a typo or a `pull` fails loudly instead of fetching someone else's image.
 
@@ -112,16 +179,16 @@ docker run --rm --network none --entrypoint /usr/bin/xrpld localhost/xrpld:3.4.1
 
 The Dockerfile pins two values that can change between releases: the signing key fingerprint and the Ubuntu base digest. If the key rotates, the build refuses (good). Confirm the new fingerprint from both official sources before you update it. Bump the base digest on purpose to pick up Ubuntu security patches.
 
-## Step 3: Test It the Way Production Runs It
+### Build Step 3: Test It the Way Production Runs It
 
-This is the step that saves you. Check who your container runs as today:
+Check who your container runs as today:
 
 ```bash
 docker inspect <container> --format 'User={{json .Config.User}}'
 docker exec <container> id
 ```
 
-The old `xrpllabsofficial` image ran as **root** by default. The new image defaults to **uid 997**. If your compose file has no `user:` line, you've been running as root, and the switch changes that silently.
+The old `xrpllabsofficial` image ran as **root** by default. This image defaults to **uid 997**. If your compose file has no `user:` line, you've been running as root, and the switch changes that silently.
 
 Why it matters: the entrypoint copies `/config/rippled.cfg` to `/etc/xrpld/xrpld.cfg`. As uid 997 that copy fails, and the entrypoint deliberately doesn't stop on a failed copy. xrpld then starts on the package's default config: a stock node with a new identity and no validator token. It syncs, it reports `full`, and a healthcheck that accepts `full` goes green.
 
@@ -149,24 +216,35 @@ You want `copied` twice, `CFG_OK` and `VL_OK`. Use the same `--user` your compos
 | Old container ran as root (empty `User`) | Add `user: "0:0"` for the swap. Move data ownership to a service account later, as a separate change |
 | Running as a non-root uid (or you want to) | `/etc/xrpld/` in the image is root-owned, so the copy fails for any non-root uid. Mount the config read-only at both `/config/rippled.cfg` and `/etc/xrpld/xrpld.cfg` (same for `validators.txt`) so the entrypoint finds identical files and skips the copy. That uid must be able to read both files and write your data directory |
 
-> **Never** run the new image beside the live one with the real config and network access. Two instances signing with one validator key is the one thing you must never do. `--network none` plus `--version` is safe.
-
-## Step 4: Swap
-
-**4a. Pick the moment.** Don't stop the node during an online-delete rotation. The log shows `SHAMapStore:WRN rotating` at the start and `finished rotation` at the end. With `advisory_delete=1`, your own `can_delete` schedule decides when the next one starts.
-
-**4b. Back up** the compose file, the config and `validators.txt` to a dated directory, mode 0700, on the same box. The config holds your `[validator_token]`, so it never leaves the machine. Leave the data volume alone: it carries over, and so does your node identity (`wallet.db`). Keep the old image. Don't prune.
-
-**4c. Edit the compose file:**
+Compose changes for this option:
 
 ```yaml
     image: localhost/xrpld:3.4.1
     pull_policy: never        # local image, never try a registry
-    user: "0:0"               # only if the old container ran as root (Step 3)
+    user: "0:0"               # only if the old container ran as root
     stop_grace_period: 5m     # matches the package's systemd unit (TimeoutStopSec=5min)
 ```
 
-**4d. Recreate only the validator service:**
+## Swap
+
+This applies to both options.
+
+> **Never** run the new image beside the live one with the real config and network access. Two instances signing with one validator key is the one thing you must never do. The dry runs above use `--network none` and exit at once, which is safe.
+
+**Note your deadline first.** Ask your node which amendments have majority:
+
+```bash
+docker exec <container> xrpld --conf /etc/xrpld/xrpld.cfg -q feature \
+  | jq -r '.result.features[] | select(.enabled==false and .majority!=null) | "\(.name // "?") supported=\(.supported) majority=\(.majority)"'
+```
+
+`majority` is in Ripple epoch seconds. Convert it with `date -u -d @$((majority + 946684800))`, then add 14 days. An amendment your version doesn't support (`supported=false`, often `name=?`) blocks you on that date, and your rollback to the old version expires then.
+
+**Pick the moment.** Don't stop the node during an online-delete rotation. The log shows `SHAMapStore:WRN rotating` at the start and `finished rotation` at the end. With `advisory_delete=1`, your own `can_delete` schedule decides when the next one starts.
+
+**Back up** the compose file, the config and `validators.txt` to a dated directory, mode 0700, on the same box. The config holds your `[validator_token]`, so it never leaves the machine. Leave the data volume alone: it carries over, and so does your node identity (`wallet.db`). Keep the old image. Don't prune.
+
+**Recreate only the validator service:**
 
 ```bash
 docker compose -p <project> -f /path/to/docker-compose.yml up -d --timeout 300 <service>
@@ -174,21 +252,20 @@ docker compose -p <project> -f /path/to/docker-compose.yml up -d --timeout 300 <
 
 `--timeout 300` gives the old container 5 minutes to close NuDB cleanly. Don't use `down`, which takes the whole project with it.
 
-**4e. Read the start log:**
+**Read the start log:**
 
 ```bash
 docker logs <container> 2>&1 | grep -E 'entrypoint:|Validator identity|Process starting'
 ```
 
 ```
-entrypoint: copied /config/rippled.cfg to /etc/xrpld/xrpld.cfg
 LedgerConsensus:NFO Validator identity: <your validator public key>
 Application:NFO Process starting: xrpld-3.4.1
 ```
 
-No `Validator identity` line means it's running on the wrong config. Roll back now.
+With Option 2 you'll also see `entrypoint: copied /config/rippled.cfg to /etc/xrpld/xrpld.cfg`. No `Validator identity` line means it's running on the wrong config. Roll back now.
 
-## Step 5: Verify
+## Verify
 
 | Check | Command | Pass |
 |---|---|---|
@@ -196,7 +273,6 @@ No `Validator identity` line means it's running on the wrong config. Roll back n
 | Identity | `server_info` | `pubkey_validator` and `pubkey_node` unchanged |
 | Quorum | `server_info` | `validation_quorum` back to the old value (it can read one higher until the Negative UNL reapplies) |
 | Not blocked | `server_info` | no `amendment_blocked` |
-| Config in use | `docker exec <c> cmp /config/rippled.cfg /etc/xrpld/xrpld.cfg` | exit 0 |
 | New amendment | `feature` | `supported: true` |
 | UNL | `validators` | both publisher lists `available: true` |
 | Health | `docker inspect` | `healthy` |
@@ -213,22 +289,28 @@ cp /path/to/backup/docker-compose.yml /path/to/docker-compose.yml
 docker compose -p <project> -f /path/to/docker-compose.yml up -d --timeout 300 <service>
 ```
 
-**The rollback expires.** Once the new amendment enables on the network, the old version is amendment blocked. After that, roll back only to another image that supports it. Keep your previous `localhost/xrpld` tag around for that reason.
+**The rollback expires.** Once the new amendment enables on the network, the old version is amendment blocked. After that, roll back only to another image that supports it. Keep your previous image tag around for that reason.
+
+If you changed data ownership for the move (`chown` to 999), change it back before you roll back to an image that runs as another user.
 
 ## Common Mistakes
 
 | Mistake | What happens |
 |---|---|
-| Skipping the Step 3 test | The node starts on a stock config with a new identity. The healthcheck stays green |
-| Rebuilding the same tag | Every build is a different image (the build date is in it). The tag moves, and the next recreate changes your node's image without anyone asking |
-| Tagging `latest` or no `localhost/` prefix | A pull can fetch someone else's image |
+| Swapping `xrpllabsofficial` for `rippleci` by changing only the image line | xrpld ignores `/config/` and starts on the image's stock config: a new identity, no validator token |
+| Running `rippleci/xrpld:develop` in production | Unreleased code |
+| Leaving `--silent` on while alerts or rotation watchers read `docker logs` | They go blind after startup |
+| Skipping the dry run | The node starts on the wrong config or can't write its data. With the wrong config, the healthcheck can stay green |
+| Rebuilding the same `localhost/` tag (Option 2) | Every build is a different image (the build date is in it). The tag moves, and the next recreate changes your node's image without anyone asking |
 | Default 90 s stop grace | Long-running nodes can hit SIGKILL mid-close. Use 5 minutes |
 | `docker compose down` | Stops every service in the project |
 | Testing the new image with the real config and network | Two nodes signing with one validator key |
 | Pruning the old image right after | No fast rollback |
 | A healthcheck that passes on `full` | It can't tell your validator from a stock node running the wrong config. Check `proposing` and `pubkey_validator` yourself after every swap |
 
-## My Run (3.3.0 to 3.4.1, 2026-09-26)
+## My Run (Option 2, 3.3.0 to 3.4.1, 2026-09-26)
+
+The official 3.4.1 image was already up, but I hadn't found it yet, so I used Option 2. The swap steps are the same for both.
 
 | Item | Result |
 |---|---|
@@ -244,6 +326,9 @@ docker compose -p <project> -f /path/to/docker-compose.yml up -d --timeout 300 <
 
 ## Sources
 
+- [Docker Hub: rippleci/xrpld tags](https://hub.docker.com/r/rippleci/xrpld/tags): the official image
+- [Mayukha Vadari on X, 2026-09-19](https://x.com/msvadari/status/2101364629037576276): the image auto-updates as part of the release process
+- [WietseWind/docker-xrpld#31](https://github.com/WietseWind/docker-xrpld/issues/31): `xrpllabsofficial/xrpld` retired in favour of it
 - [xrpl.org: Introducing XRP Ledger version 3.4.1](https://xrpl.org/blog/2026/xrpld-3.4.1): the emergency release, the DEB SHA-256, the commit hash, and the 2026-10-09 expectation
 - [xrpl.org: Introducing XRP Ledger version 3.4.0](https://xrpl.org/blog/2026/xrpld-3.4.0): the packages moved to packages.xrplf.org with the XRPLF key
 - [XRPLF/rippled install.md](https://github.com/XRPLF/rippled/blob/develop/docs/install.md): the APT steps and the key fingerprint
@@ -262,7 +347,7 @@ These are the exact files I built and ran for 3.4.1. Treat them as a working exa
 | Runtime uid/gid (997) | The `groupadd`/`useradd` lines and `USER`. A compose `user:` line overrides it without a rebuild |
 | Where you mount your config | `entrypoint.sh` reads `/config/xrpld.cfg`, then `/config/rippled.cfg`, then `/config/validators.txt`. Match your mounts, or change those paths |
 
-After any edit, rerun the Step 3 test before you swap.
+After any edit, rerun the Build Step 3 test before you swap.
 
 ### Dockerfile
 

@@ -2994,6 +2994,8 @@ Keeping rippled updated is essential. Outdated servers can become amendment bloc
 | **GitHub Releases** | [github.com/XRPLF/rippled/releases](https://github.com/XRPLF/rippled/releases) | Detailed release notes, changelogs |
 | **GitHub Watch** | Click "Watch" → "Custom" → "Releases" | Email notifications for new releases |
 | **RSS Feed** | `github.com/XRPLF/rippled/releases.atom` | For RSS readers |
+| **@XRPLOperations on X** | [x.com/XRPLOperations](https://x.com/XRPLOperations) | Operator-focused updates |
+| **Docker image tags** | [hub.docker.com/r/rippleci/xrpld/tags](https://hub.docker.com/r/rippleci/xrpld/tags) | New official image tags as releases ship |
 
 **Built-in Upgrade Notification**
 
@@ -3128,27 +3130,30 @@ sudo apt update
 
 **The Bottom Line**
 
-**Build your own image from the signed package.** Official xrpld binaries ship as signed DEB and RPM packages, and the install guide has no Docker section. Third-party images can lag behind a release, and when a new amendment is on a two-week clock, that lag can leave you amendment blocked. Your own build removes the wait.
+**Use the official image, [`rippleci/xrpld`](https://hub.docker.com/r/rippleci/xrpld/tags).** Ripple's release process publishes it automatically, and 3.4.1 was up on release day. The tags page lists every version with a copy/paste `docker pull` command. Pin a release tag such as `3.4.1`. Never use `develop` in production. There's no `latest`.
 
-Full step-by-step guide: **[xrpld in Docker: Build Your Own Image from the Signed Package](XRPLD-DOCKER-IMAGE.md)**
+**It isn't a drop-in for `xrpllabsofficial/xrpld`**, which stops at 3.3.0 and has been retired by its maintainer. Changing only the image line starts xrpld on the image's stock config: a new identity and no validator token.
 
-**The Short Version**
+| | `xrpllabsofficial/xrpld` | `rippleci/xrpld` |
+|---|---|---|
+| Config mount | `/config/rippled.cfg`, copied in by an entrypoint | `/etc/xrpld/xrpld.cfg`, read directly |
+| Runtime user | root | uid 999 (needs read on the config, write on the data dir) |
+| Console logs | everything | startup only (`--silent`), unless you override `command` |
 
-1. Verify the release: the announcement's SHA-256, the package index, and the signing key fingerprint
-2. Build `localhost/xrpld:<version>` from the signed DEB (about a minute)
-3. Test the image with your exact production mounts and user, with no network
-4. Swap with `docker compose up -d --timeout 300 <service>`, never `down`
-5. Verify the version, your identity keys, `proposing`, and that the network sees your validations
+Full guide, with the migration checklist, verification, swap and rollback: **[xrpld in Docker: The Official Image, or Build Your Own](XRPLD-DOCKER-IMAGE.md)**
 
-**The Trap**
+**The Alternative: Build Your Own**
 
-The old `xrpllabsofficial` image ran as root. The image in the guide defaults to uid 997. If your compose file has no `user:` line, the entrypoint can't copy your config into place, and xrpld starts on the stock config with no validator token. It still syncs to `full`, and a healthcheck that accepts `full` stays green. Step 3 of the guide catches this before you swap.
+You can also build an image from the XRPLF signed DEB in about a minute. Do that if you want apt to verify the signature chain on your own machine, or if you want to keep the old `/config` contract. The same guide covers it (Option 2).
 
-**Example: xrpld 3.4.1 (September 2026)**
+**Either Way**
 
-3.4.1 was an emergency release. Its new amendment had supermajority support on release day and a two-week clock to enable. The signed packages were out the same day, but `xrpllabsofficial/xrpld` still had no 3.4.x tag a day later. I built my own image and upgraded: 28 seconds without RPC, and `proposing` again 3 min 15 s after the new container started.
+1. Verify: the binary's commit hash and the package SHA-256 match the release announcement
+2. Dry-run the image with your exact production mounts and user, with no network
+3. Swap with `docker compose up -d --timeout 300 <service>`, never `down`
+4. Verify the version, your identity keys, `proposing`, and that the network sees your validations
 
-**Source:** [Installing xrpld](https://github.com/XRPLF/rippled/blob/develop/docs/install.md) (packages and signing key), [XRPL Blog](https://xrpl.org/blog) (release announcements with the package SHA-256), [Introducing XRP Ledger version 3.4.1](https://xrpl.org/blog/2026/xrpld-3.4.1) (the example)
+**Source:** [rippleci/xrpld on Docker Hub](https://hub.docker.com/r/rippleci/xrpld/tags), [Mayukha Vadari (Ripple): "this one auto updates as a part of the release process"](https://x.com/msvadari/status/2101364629037576276), [xrpllabsofficial retirement](https://github.com/WietseWind/docker-xrpld/issues/31), [Installing xrpld](https://github.com/XRPLF/rippled/blob/develop/docs/install.md), [XRPL Blog](https://xrpl.org/blog)
 
 ### Post-Upgrade Verification
 
