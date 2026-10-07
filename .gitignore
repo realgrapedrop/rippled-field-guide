@@ -1,11 +1,11 @@
-# Internal/private files
-.internal/
-CLAUDE.md
-CHANGELOG.md
-PENDING-CHANGES.md
-VALIDATOR-STATUS.md
+# Private files (.project/ is its own repo on Forgejo)
 .project/
+CLAUDE.md
+
+# Local tool state
 .claude/
+.remember/
+.github/
 
 # OS files
 .DS_Store
