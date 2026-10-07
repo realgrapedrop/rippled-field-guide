@@ -1426,6 +1426,20 @@ ss -tlnp | grep rippled
 
 A restart of an already-synced node is faster but not instant. On an 8 vCPU / 32 GB NVMe VPS, returning to `full` took 5-10 minutes in testing, and almost all of it was spent in `connected`. Once the node acquires the network's current validated ledger, the climb through `syncing` and `tracking` takes seconds.
 
+**An Empty Range After a Restart Is Normal**
+
+**Don't delete your store because `complete_ledgers` says `empty`.** rippled can't trust the ledgers on disk until it has synced with the network, so the range reports empty even when the store is intact. On restart it:
+
+1. Finds peers
+2. Collects validations until it knows the current validated ledger
+3. Downloads that ledger, pulling nodes from the local store where it can
+4. Switches to `full` (or `proposing`)
+5. Back-fills history toward `ledger_history`, from the local store first, the network second
+
+Back-fill is one of the lowest-priority jobs, so the range keeps growing for a while after the node is `full`. Two directories under the NuDB path are also normal (writable and archive, see [The Rotation Mechanism](#online_delete-tuning)).
+
+Wiping the store is a last resort. Do it only if rippled crash-loops on startup or the logs name a missing backend. A missing rotating backend makes rippled stop on startup on purpose. A node that's up but empty is still syncing.
+
 **What Happens During Sync**
 
 1. rippled connects to peers (check with `rippled peers`)
@@ -1463,6 +1477,8 @@ watch -n 5 'rippled server_info | grep -E "server_state|complete_ledgers|peers"'
 |---------|--------------|
 | Stuck on `disconnected` | Firewall blocking port 51235, no outbound connectivity |
 | `connected` for 5-10 minutes after a restart | Normal. The node is waiting to acquire the current validated ledger from peers (`Need consensus ledger` in the log). Past ~15 minutes, check `rippled peers` and consider `[ips_fixed]` toward known-good hubs |
+| `connected` for 40+ minutes after a restart | Not normal, and not yet explained. Keep the store and the logs, and check for a crash loop before wiping anything. Under investigation in [rippled #8518](https://github.com/XRPLF/rippled/issues/8518) |
+| `complete_ledgers` empty after a restart | Normal until the node syncs. See [An Empty Range After a Restart Is Normal](#initial-sync) |
 | Very slow sync | Undersized hardware, disk I/O bottleneck |
 | `server_state` cycling | Resource exhaustion, check RAM and disk |
 
@@ -1743,13 +1759,40 @@ If you still experience issues, these parameters in `[node_db]` may help:
 - `age_threshold_seconds` - minimum age before deletion eligible
 - `recovery_wait_seconds` - delay before rotation resumes after interruption
 
+**Before a Planned Stop**
+
+**Give rippled up to 5 minutes to stop, and don't stop it in the middle of a rotation.** A SIGTERM lets an in-flight rotation abort at a safe point. A SIGKILL from a short stop timeout doesn't, and a rotation can run far longer than any default timeout (93 minutes on one of my nodes).
+
+| Setup | Stop timeout | Set it to 5 minutes |
+|-------|--------------|---------------------|
+| Native, xrpld package | `TimeoutStopSec=5min` in the shipped systemd unit (3.4.1) | Already set. Match it in any custom unit |
+| Docker | 10 s by default | `stop_grace_period: 5m` in compose, `docker stop -t 300`, or `docker compose up -d --timeout 300` |
+
+Check for a running rotation first. The log lines come from rippled itself at `warn` level, so they show on native and Docker installs alike:
+
+```bash
+# Native: the file in your [debug_logfile]. Docker: docker logs <container> 2>&1 | grep ...
+grep -hE "rotating|finished rotation" /var/log/rippled/debug.log* | tail -2
+```
+
+If the last line is `rotating ...` with no `finished rotation` after it, wait. Grep `debug.log*` so a rotated log file doesn't hide the start line.
+
+Or see how far away the next rotation is, without reading logs:
+
+```bash
+sqlite3 -readonly /var/lib/rippled/db/state.db "select LastRotatedLedger from DbState;"
+rippled server_info | grep '"seq"'
+```
+
+With `advisory_delete=0`, the next rotation starts near `LastRotatedLedger + online_delete`. If that's hours of ledgers away (about 920 per hour), you have a safe window.
+
 **The One Rule**
 
 **Never use low values to "save disk space."** You'll pay for it in I/O storms and degraded validator performance. Budget ~100 GB of peak NuDB disk for 32768 (September 2026) and move on. Disk is cheap; validator reputation isn't.
 
 **Source**
 
-This issue was identified by [@shortthefomo](https://github.com/shortthefomo) and documented in [rippled issue #6202](https://github.com/XRPLF/rippled/issues/6202), with technical explanation from Ripple engineer [@ximinez](https://github.com/ximinez). The disk sizing formula, and the catch that this guide's old GB figures had gone stale, came from Kris Dangerfield ([@krisdangerfield](https://x.com/krisdangerfield)).
+This issue was identified by [@shortthefomo](https://github.com/shortthefomo) and documented in [rippled issue #6202](https://github.com/XRPLF/rippled/issues/6202), with technical explanation from Ripple engineer [@ximinez](https://github.com/ximinez). The disk sizing formula, and the catch that this guide's old GB figures had gone stale, came from Kris Dangerfield ([@krisdangerfield](https://x.com/krisdangerfield)). The stop guidance and the restart behavior in [Initial Sync](#initial-sync) come from [rippled issue #8518](https://github.com/XRPLF/rippled/issues/8518), with the startup sequence explained by [@ximinez](https://github.com/ximinez).
 
 ### advisory_delete
 
@@ -1861,7 +1904,7 @@ The default weekly schedule is fine for a validator.
 If you add a second NVMe to an existing host, the migration is straightforward. Plan for a maintenance window. Your validator will miss ledgers while data copies.
 
 1. Install the new NVMe. Partition it (a single ext4 partition works fine) and format with `noatime`.
-2. Stop rippled cleanly. Allow the full grace period (30-90 seconds) for clean shutdown.
+2. Stop rippled cleanly, and give it up to 5 minutes. See [Before a Planned Stop](#online_delete-tuning).
 3. Copy the nodestore: `rsync -aHAX /var/lib/rippled/ /mnt/new-disk/`.
 4. Update `/etc/fstab` so the new disk mounts at `/var/lib/rippled`.
 5. Verify the mount with `mount | grep rippled`.

@@ -21,6 +21,8 @@ The Rippled Field Guide is a community effort. This page recognizes everyone who
 | [@realgrapedrop](https://github.com/realgrapedrop) | Best Practices | Installation best practices section covering packages vs source, service accounts, post-install verification, initial sync, and stock node first | 01/2026 |
 | [@REClosureDEX](https://x.com/REClosureDEX) | Field Tested | Confirmed `online_delete` tuning resolved validator dropping 2 ledgers hourly on a third-party configured setup | 02/2026 |
 | [@krisdangerfield](https://x.com/krisdangerfield) | Performance | `online_delete` disk sizing formula (MB/ledger x ledgers between rotations x 2), an independent ~1.1 MB/ledger measurement, and the catch that the guide's 16-24 GB figure had gone stale | 09/2026 |
+| [@krisdangerfield](https://x.com/krisdangerfield) | Operations | Traced the `online_delete` rotation sequence in source and raised the risk of a short stop timeout killing an in-flight rotation, which led to the guide's "Before a Planned Stop" guidance | 10/2026 |
+| [@ximinez](https://github.com/ximinez) | Operations | Explained the restart sequence in [#8518](https://github.com/XRPLF/rippled/issues/8518): `complete_ledgers` reports empty until the node syncs, back-fill runs at low priority, and a missing rotating backend crashes startup on purpose | 10/2026 |
 
 ---
 
