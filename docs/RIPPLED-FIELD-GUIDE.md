@@ -1708,7 +1708,7 @@ The cost is disk. Higher values keep more ledgers, and the store holds up to two
 
 - **Why x 2:** rotation keeps the old backend (archive) until the new one (writable) has filled. Disk use cycles between 1x just after a rotation and 2x just before the next.
 - **MB/ledger tracks network activity.** I measured 0.65 to 1.3 on mainnet in September 2026 (median ~0.9). Another operator measured ~1.1 the same month. Earlier versions of this guide quoted about half that, which was right when it was written. Any fixed GB table goes stale.
-- **Ledgers between rotations** is about `online_delete` with `advisory_delete=0`. With a scheduled `can_delete` it's longer. A daily trigger at 32768 rotates every 48 hours (~44,300 ledgers).
+- **Ledgers between rotations** is about `online_delete` with `advisory_delete=0`. A scheduled `can_delete` can stretch it. My validator calls `can_delete now` in a short daily window and sets it back to `never` afterwards, so a rotation only runs inside a window. At 32768 that's every 48 hours (~44,300 ledgers). A plain daily `can_delete now` leaves the permit open, and in the 3.4.1 code the next rotation then runs as soon as it's due (~35.5 hours at 32768).
 
 Example at `online_delete=32768`: 1.3 x 32768 x 2 = ~85 GB peak. Over 16 rotations, my validator's peak ranged from 64 GB to 99 GB, and peak over minimum averaged 2.0.
 
@@ -1812,7 +1812,7 @@ This issue was identified by [@shortthefomo](https://github.com/shortthefomo) an
 - **`0` (recommended)**: Standard deployments. rippled handles everything.
 - **`1`**: Only if you have external tooling that needs to process ledger data before deletion, or you're running a specialized archival integration.
 
-> **Disk note:** with `advisory_delete=1`, rotation waits for your `can_delete` trigger. A daily trigger with `online_delete=32768` rotates every 48 hours, which holds ~35% more data per copy than free-running. Size the disk for the real interval. See [Disk Sizing](#online_delete-tuning).
+> **Disk note:** with `advisory_delete=1`, rotation waits for your `can_delete` permission. A daily window that sets it back to `never` (like mine) rotates every 48 hours at `online_delete=32768`, which holds ~35% more data per copy than free-running. A plain daily `can_delete now` rotates about as often as free-running (3.4.1 code). Size the disk for the real interval. See [Disk Sizing](#online_delete-tuning).
 
 **Configuration**
 
@@ -2080,7 +2080,7 @@ A single validator running `node_size: huge` with 21 peers and compression enabl
 
 | Factor | What It Does | Impact |
 | ------ | ------------ | ------ |
-| `node_size` | Controls caching, connection capacity, and memory allocation | `huge` accepts more connections and handles more data. `medium` and `small` reduce traffic. |
+| `node_size` | Sets cache sizes, ledger fetch limits, and thread counts | It doesn't set the number of peer connections (`peers_max` does). I haven't measured its effect on traffic. |
 | `peers_max` | Number of peer connections | Each peer is a two-way stream of ledgers, transactions, and proposals. More peers = more traffic. |
 | `compression` | Compresses peer-to-peer traffic | Reduces bandwidth significantly when enabled. Should always be on. |
 | `ledger_history` / `online_delete` | How much ledger history you retain | Peers can request history from your node. More history = more potential outbound traffic. |
@@ -2089,11 +2089,12 @@ A single validator running `node_size: huge` with 21 peers and compression enabl
 
 #### What You Control
 
-The three biggest levers:
+The two biggest levers:
 
-1. **`node_size`** - stepping down from `huge` to `medium` reduces connection capacity and caching
-2. **`peers_max`** - fewer peers means less traffic, but also less redundancy
-3. **`compression`** - always enable this, no reason not to
+1. **`peers_max`** - fewer peers means less traffic, but also less redundancy
+2. **`compression`** - always enable this, no reason not to
+
+`node_size` isn't a bandwidth lever. In 3.4.1 it sets caches, ledger fetch limits and thread counts, and nothing it controls changes the number of peer connections.
 
 #### What You Don't Control
 
@@ -2734,9 +2735,9 @@ If all four of those are clean during a `load_factor_server` spike, the load is 
 
 **The auto-tune trap**
 
-A common operator instinct when `load_factor` rises is to start manually tuning `[node_db]` parameters: `cache`, `cache_age`, or sections like `[io_threads]` and `[network_threads]`. This is almost always wrong on modern rippled:
+A common operator instinct when `load_factor` rises is to start manually tuning `[node_db]` parameters: `cache_size`, `cache_age`, or sections like `[io_threads]` and `[network_threads]`. This is almost always wrong on modern rippled:
 
-- `cache` and `cache_age` inside `[node_db]` are auto-tuned by `node_size`. Manually setting them on a `huge`-sized validator is more likely to under-tune than help.
+- `cache_size` and `cache_age` inside `[node_db]` do nothing when `online_delete` is set. The rotating store doesn't create that cache (the example config says so, and `SHAMapStoreImp.cpp` builds the rotating store without one). Without online deletion `node_size` sets them, and setting them by hand is more likely to under-tune than help.
 - `[io_threads]` and `[network_threads]` as top-level config sections are not valid rippled keys. rippled will ignore them or warn at startup.
 - Thread-pool sizing for I/O and networking is handled internally based on `node_size` and detected core count.
 
@@ -2819,7 +2820,7 @@ The `postrotate` command tells rippled to close and reopen its log file. Adjust 
 
 | Component | Location | Growth Rate | Notes |
 |-----------|----------|-------------|-------|
-| Ledger database (NuDB) | `/var/lib/rippled/db/nudb` | ~12 GB/day (full history) | Controlled by `online_delete` |
+| Ledger database (NuDB) | `/var/lib/rippled/db/nudb` | With `online_delete`, cycles between 1x and 2x one generation. Full history keeps growing. | See [Disk Sizing](#online_delete-tuning) |
 | SQLite databases | `/var/lib/rippled/db` | Usually small, but check | wallet.db, transaction.db. `transaction.db` can reach tens of GB |
 | Logs | `/var/log/rippled` | Depends on log level | Controlled by logrotate |
 
@@ -3068,11 +3069,11 @@ The window between voting start and activation is typically 2 weeks. Upgrade bef
 
 Before upgrading:
 
-1. **Check current version**
+1. **Check current version** (use `rippled` in place of `xrpld` on 3.1.3 or older)
    ```bash
-   rippled --version
+   xrpld --version
    # or
-   rippled server_info | grep build_version
+   xrpld server_info | grep build_version
    ```
 
 2. **Read the release notes** - [GitHub Releases](https://github.com/XRPLF/rippled/releases)
@@ -3088,86 +3089,42 @@ Before upgrading:
 
 ### Upgrade Procedures
 
-**Method 1: Automatic Updates (Convenience)**
+**Still on `rippled` 3.1.3 or older? Migrate first.** Version 3.2.0 renamed the package, binary, service and config to `xrpld` (`/usr/bin/xrpld`, `/etc/xrpld/xrpld.cfg`, `xrpld.service`), and since 3.4.0 the packages come from `packages.xrplf.org`, signed with the XRP Ledger Foundation's key. `apt upgrade rippled` never moves you to `xrpld`. Follow [Migrate from rippled to xrpld](https://xrpl.org/docs/infrastructure/installation/migrate-to-xrpld), and copy your config, `wallet.db` and validator keys off the host before you start.
 
-Enable automatic updates using the provided cron script:
+**No automatic updates.** The `xrpld` packages don't ship the old `update-rippled-cron` or `update-rippled.sh`, so there's nothing to enable, and I'd upgrade a validator by hand anyway. If `/etc/cron.d/update-rippled-cron` is still on your server from a `rippled` install, remove it. It only checks the `rippled` package, and it restarts the service when it finds an update.
+
+**Manual Update on Ubuntu or Debian**
+
+One-time setup, if the server doesn't have the XRPLF repository yet:
 
 ```bash
-# Check if the cron config exists
-ls /opt/ripple/etc/update-rippled-cron
-
-# Enable automatic updates
-sudo ln -s /opt/ripple/etc/update-rippled-cron /etc/cron.d/
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo wget -qO /etc/apt/keyrings/xrplf.asc https://packages.xrplf.org/xrplf.asc
+gpg --show-keys /etc/apt/keyrings/xrplf.asc
+# Expect fingerprint B655416741221F780FBCFBC9AA84D41A11D29FA9
+echo "deb [signed-by=/etc/apt/keyrings/xrplf.asc] https://packages.xrplf.org/repository/deb-stable any main" | \
+  sudo tee /etc/apt/sources.list.d/xrplf.list
 ```
 
-> **Warning:** Automatic updates carry risk. If the repository were compromised, malicious code could be deployed automatically. Not recommended for high-stakes validators.
-
-**Method 2: Manual Update Script (Recommended)**
-
-Use the provided update script:
+Each upgrade:
 
 ```bash
-sudo /opt/ripple/bin/update-rippled.sh
-```
-
-This script handles the full update process including daemon reload and restart.
-
-**Method 3: Manual apt Commands (Most Control)**
-
-```bash
-# Update package lists
 sudo apt update
-
-# Check available version
-apt-cache policy rippled
-
-# Upgrade rippled
-sudo apt upgrade rippled
-
-# Reload systemd (picks up any unit file changes)
+apt-cache policy xrpld          # confirm the candidate version
+sudo apt upgrade xrpld          # keep your xrpld.cfg if apt asks
 sudo systemctl daemon-reload
-
-# Restart rippled
-sudo systemctl restart rippled
+sudo systemctl restart xrpld
 ```
 
-**Method 4: Graceful Shutdown Before Upgrade**
+The package upgrade doesn't restart the server. The old binary keeps running until you restart it, so don't skip the last step.
 
-For the smoothest upgrade with fastest re-sync:
+Before you restart, check for a running `online_delete` rotation (see [Before a Planned Stop](#online_delete-tuning)). Stop and restart through `systemd`, so the unit's `TimeoutStopSec=5min` gives the server time to stop cleanly.
 
-```bash
-# Install the new package (doesn't restart yet)
-sudo apt update && sudo apt upgrade rippled
+If `apt update` fails with a GPG error, fetch the key again with the `wget` line above and check the fingerprint before you trust it.
 
-# Gracefully stop rippled
-/opt/ripple/bin/rippled stop
+On Red Hat, follow the xrpl.org [Red Hat update page](https://xrpl.org/docs/infrastructure/installation/update-xrpld-manually-on-rhel).
 
-# Wait for full stop (can take a minute)
-while systemctl is-active rippled >/dev/null 2>&1; do
-    sleep 2
-done
-
-# Reload and start
-sudo systemctl daemon-reload
-sudo systemctl start rippled
-```
-
-> **Note:** There's a known issue where `rippled stop` sometimes causes a restart instead of stopping. If this happens, use `sudo systemctl stop rippled` instead.
-
-**GPG Key Updates**
-
-Occasionally, the package signing key is renewed. If `apt update` fails with GPG errors:
-
-```bash
-# Download and trust the new key
-wget -q -O - "https://repos.ripple.com/repos/api/gpg/key/public" | \
-  sudo gpg --dearmor -o /etc/apt/keyrings/ripple.gpg
-
-# Retry update
-sudo apt update
-```
-
-**Source:** [Update Manually on Ubuntu](https://xrpl.org/update-rippled-manually-on-ubuntu.html)
+**Source:** [Update Manually on Ubuntu or Debian](https://xrpl.org/docs/infrastructure/installation/update-xrpld-manually-on-ubuntu), [Migrate from rippled to xrpld](https://xrpl.org/docs/infrastructure/installation/migrate-to-xrpld), [xrpld 3.4.0 release](https://xrpl.org/blog/2026/xrpld-3.4.0) (packages on packages.xrplf.org), `package/shared/xrpld.service` and `package/debian/rules` at tag 3.4.1 (stop timeout, no restart on upgrade)
 
 ### Upgrading in Docker
 
@@ -3251,12 +3208,14 @@ rippled feature | grep -A1 '"blocked"'
 
 **How to Resolve**
 
-Upgrade to the latest rippled version:
+Upgrade to the latest `xrpld` version:
 
 ```bash
-sudo apt update && sudo apt upgrade rippled
-sudo systemctl restart rippled
+sudo apt update && sudo apt upgrade xrpld
+sudo systemctl restart xrpld
 ```
+
+On `rippled` 3.1.3 or older, migrate to `xrpld` first (see [Upgrade Procedures](#upgrade-procedures)).
 
 In most cases, upgrading to the latest version resolves the block. Check [Known Amendments](https://xrpl.org/resources/known-amendments) to see which version introduced support for specific amendments.
 
